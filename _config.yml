@@ -1,6 +1,6 @@
 # Site settings
 title: XiaoLong Blog
-SEOTitle: 小龙的博客 | Hux Blog
+SEOTitle: 小龙的博客 | XiaoLong Blog
 header-img: img/home-bg.jpg
 url: "http://http://gao-xiao-long.github.io"              # your host, for absolute URL
 baseurl: ""                             # for example, '/blog' if your blog hosted on 'host/blog'
