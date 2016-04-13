@@ -30,11 +30,6 @@ tags:
 **其他相关文章**
 
 [磁盘性能指标--IOPS 理论](http://elf8848.iteye.com/blog/1731274)
-
 [淘宝海量数据库之八-攻克随机IO难关](http://blog.sina.com.cn/s/blog_3fc85e260100qwv8.html)
-
 [数据库如何抵抗随机IO：问题、方法与现实](http://wangyuanzju.blog.163.com/blog/static/13029201132154010987)
-
 [提升磁盘io性能的几个技巧](http://www.searchtb.com/2011/05/%E6%8F%90%E5%8D%87%E7%A3%81%E7%9B%98io%E6%80%A7%E8%83%BD%E7%9A%84%E5%87%A0%E4%B8%AA%E6%8A%80%E5%B7%A7.html)
-
-
