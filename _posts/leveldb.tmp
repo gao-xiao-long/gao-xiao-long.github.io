@@ -11,7 +11,7 @@ Opening A Database
 
 A leveldb database has a name which corresponds to a file system directory. All of the contents of database are stored in this directory. The following example shows how to open a database, creating it if necessary:
 
-(一个leveldb数据库都会对应到文件系统中一个目录。数据库中所有的内容都存放在这个这个目录里， 下面的例子展示了如何打开(如果不存在则创建)一个数据库)
+(一个leveldb数据库都会对应到文件系统中一个目录。数据库中所有的内容都存放在这个这个目录里，下面的例子展示了如何打开(如果不存在则创建)一个数据库)
 
   #include <cassert>
   #include "leveldb/db.h"
@@ -59,6 +59,7 @@ The database provides Put, Delete, and Get methods to modify/query the database.
 
 Atomic Updates (原子更新)
 
+需要注意的是如果程序在执行到Put(key2)和Delete(k1)之间异常结束的话。相同的value会被存储到多个key中。这个问题可以使用WriteBatch类来原子性的应用"a set of updates"作来避免。
 Note that if the process dies after the Put of key2 but before the delete of key1, the same value may be left stored under multiple keys. Such problems can be avoided by using the WriteBatch class to atomically apply a set of updates:
 
   #include "leveldb/write_batch.h"
@@ -71,10 +72,14 @@ Note that if the process dies after the Put of key2 but before the delete of key
     batch.Put(key2, value);
     s = db->Write(leveldb::WriteOptions(), &batch);
   }
+
+WriteBatch 保存一系列的对数据库的操作，并且这些操作在batch中会被按顺序应用。需要注意的是我们再调用Put前先调用的Delete，所以(??这块翻译不通过)
 The WriteBatch holds a sequence of edits to be made to the database, and these edits within the batch are applied in order. Note that we called Delete before Put so that if key1 is identical to key2, we do not end up erroneously dropping the value entirely.
+
+WriteBatch除了满足原子操作外,还可以通过将大量独立操作放到一个batch中的方法来加速批量更新操作(?? 翻译individual mutations对吗)
 Apart from its atomicity benefits, WriteBatch may also be used to speed up bulk updates by placing lots of individual mutations into the same batch.
 
-Synchronous Writes
+Synchronous Writes (同步写)
 
 By default, each write to leveldb is asynchronous: it returns after pushing the write from the process into the operating system. The transfer from operating system memory to the underlying persistent storage happens asynchronously. The sync flag can be turned on for a particular write to make the write operation not return until the data being written has been pushed all the way to persistent storage. (On Posix systems, this is implemented by calling either fsync(...) or fdatasync(...) or msync(..., MS_SYNC) before the write operation returns.)
   leveldb::WriteOptions write_options;
