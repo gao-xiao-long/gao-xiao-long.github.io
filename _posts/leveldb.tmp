@@ -80,22 +80,36 @@ WriteBatch除了满足原子操作外,还可以通过将大量独立操作放到
 Apart from its atomicity benefits, WriteBatch may also be used to speed up bulk updates by placing lots of individual mutations into the same batch.
 
 Synchronous Writes (同步写)
+(PS: 为了解决CPU与设备之间速度不匹配矛盾，及协调逻辑记录大小和物理记录大小不一致的问题，提高CPU和设备之间的并行性.减少I/O操作对CPU的中断次数，放宽对CPU中断响应时间要求，操作系统普遍采取缓冲技术，缓冲用于平滑两种不同速度的硬部件或设备之间的信息传输，在主存储器中开辟一个存储区，称为缓冲区，专门用于临时存放I/O操作的数据
+ 实现缓冲技术的基本思想如下：当进程执行写操作输出数据时(如系统write调用)，先向系统申请一个输出缓冲区，然后，将数据送至缓冲区。若是顺序写请求，则不断的把数据填入缓冲区，直到装满为止，此后，进程可以继续计算，同时，系统将缓冲区的内容写到设备上。当进程执行读操作输入数据时，先向系统申请一个输入缓冲区，系统将设备上的一条物理记录(比如一个扇区的数据)读至缓冲区，然后根据要求，把当前所需要的逻辑记录从缓冲区选出并传送给进程。
+ 用户上述目的的专用主存区称之为I/O缓冲区。在输出数据时，只有在系统来不及腾空缓冲区而进程有需要写数据时，它才需要等待；在输入数据时，仅当缓冲区为空而进程又要从中读取数据时，它才需要等待。其他时间可以进一步提高CPU和设备的并行性，设备和设备之间的并行性，从而提高系统效率,在操作系统的管理下，常开辟出缓冲区以服务于各种设备(如磁盘IO和网络IO)，常见的缓冲技术有单缓冲、双缓冲和多缓冲
+        --操作系统教程 孙钟秀 5.4
+ )。
 
+
+默认情况下,所有向leveldb的写操作都是异步的，即将要写的内容推给操作系统后就返回。操作系统内存向底层的持久化存储写是异步的。可以通过打开sync标识来保证要写的数据已经完全写入了持久化存储里。(在Posix系统下，通过在return前调用fsync(...)或fdatasync(...)或msync(..., MS_SYNC)实现)
 By default, each write to leveldb is asynchronous: it returns after pushing the write from the process into the operating system. The transfer from operating system memory to the underlying persistent storage happens asynchronously. The sync flag can be turned on for a particular write to make the write operation not return until the data being written has been pushed all the way to persistent storage. (On Posix systems, this is implemented by calling either fsync(...) or fdatasync(...) or msync(..., MS_SYNC) before the write operation returns.)
   leveldb::WriteOptions write_options;
   write_options.sync = true;
   db->Put(write_options, ...);
+
+异步写往往比同步写块1000倍以上。异步写的缺点是**机器**的crash可能会导致最新的几条改变丢失。需要说明的是仅仅是**writing process**的crash不会导致数据的丢失(an update .... ?)
 Asynchronous writes are often more than a thousand times as fast as synchronous writes. The downside of asynchronous writes is that a crash of the machine may cause the last few updates to be lost. Note that a crash of just the writing process (i.e., not a reboot) will not cause any loss since even when sync is false, an update is pushed from the process memory into the operating system before it is considered done.
+
+(??翻译不是很通顺)通常情况下使用异步写是安全的。比如,当填充大量数据到数据库时,可以在crash之后通过重新启动批量加载来处理(lost updates)。还有一个混合方案就是:每N条数据都是同步写，当crash的时候，批量加载操作从上一次的同步写操作完成之后的位置之后进行。(同步写操作可以做个标示来描述crash的后该从哪里启动)
 Asynchronous writes can often be used safely. For example, when loading a large amount of data into the database you can handle lost updates by restarting the bulk load after a crash. A hybrid scheme is also possible where every Nth write is synchronous, and in the event of a crash, the bulk load is restarted just after the last synchronous write finished by the previous run. (The synchronous write can update a marker that describes where to restart on a crash.)
 
+可以用WriteBatch来替换异步写。多个update操作可以使用WriteBatch并且使用一个同步写(比如，将write_options.sync设置为true).同步写额外的cost会被均摊到一次批量写操作里(译注: 一次批量操作n个写，使用同步写+WriteBatch方法，一次写操作平均开销为(一次同步写的cost/n)
 WriteBatch provides an alternative to asynchronous writes. Multiple updates may be placed in the same WriteBatch and applied together using a synchronous write (i.e., write_options.sync is set to true). The extra cost of the synchronous write will be amortized across all of the writes in the batch.
 
-Concurrency
+Concurrency (并发)
 
+一个数据库一次只能被一个进程打开。leveldb的实现依赖于对操作系统的一次加锁来防止misuse。在一个进程内，同一个leveldb::DB可以安全的被多个线程操作，比如，不同的线程可以一边向fetch iterators写数据一边调用Get，而不需要额外的同步机制(leveldb内部会自己实现同步机制)。然而,其他object(比如Iterator或者WriteBatch)则需要外部的同步机制。如果两个线程共用一个object,它们必须通过使用自己的锁机制来保证正常运行。更多的细节在public header files中。
 A database may only be opened by one process at a time. The leveldb implementation acquires a lock from the operating system to prevent misuse. Within a single process, the same leveldb::DB object may be safely shared by multiple concurrent threads. I.e., different threads may write into or fetch iterators or call Get on the same database without any external synchronization (the leveldb implementation will automatically do the required synchronization). However other objects (like Iterator and WriteBatch) may require external synchronization. If two threads share such an object, they must protect access to it using their own locking protocol. More details are available in the public header files.
 
-Iteration
+Iteration(迭代器)
 
+下面的例子演示了如何打印数据库中的所有键值对。
 The following example demonstrates how to print all key,value pairs in a database.
 
   leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
@@ -104,17 +118,22 @@ The following example demonstrates how to print all key,value pairs in a databas
   }
   assert(it->status().ok());  // Check for any errors found during the scan
   delete it;
+
+下面的变体演示了如何得到某一范围[start,limit)内的所有key
 The following variation shows how to process just the keys in the range [start,limit):
   for (it->Seek(start);
        it->Valid() && it->key().ToString() < limit;
        it->Next()) {
     ...
   }
+
+也可以进行逆向遍历(警告: 逆向遍历可能有时候比正向遍历慢)
 You can also process entries in reverse order. (Caveat: reverse iteration may be somewhat slower than forward iteration.)
   for (it->SeekToLast(); it->Valid(); it->Prev()) {
     ...
   }
-Snapshots
+
+Snapshots (快照)
 
 Snapshots provide consistent read-only views over the entire state of the key-value store. ReadOptions::snapshot may be non-NULL to indicate that a read should operate on a particular version of the DB state. If ReadOptions::snapshot is NULL, the read will operate on an implicit snapshot of the current state.
 
