@@ -135,8 +135,10 @@ You can also process entries in reverse order. (Caveat: reverse iteration may be
 
 Snapshots (快照)
 
+快照功能提供了整个数据库的一致性只读视图。如果ReadOptions::snapshot不为空就说明read打开了一个数据库状态的指定版本。如果ReadOptions::snapshot为空, read会打开一个最新状态的隐式快照(implicit snapshot of the current state)
 Snapshots provide consistent read-only views over the entire state of the key-value store. ReadOptions::snapshot may be non-NULL to indicate that a read should operate on a particular version of the DB state. If ReadOptions::snapshot is NULL, the read will operate on an implicit snapshot of the current state.
 
+快照可以通过DB::GetSnapshot()函数来创建:
 Snapshots are created by the DB::GetSnapshot() method:
 
   leveldb::ReadOptions options;
@@ -146,9 +148,13 @@ Snapshots are created by the DB::GetSnapshot() method:
   ... read using iter to view the state when the snapshot was created ...
   delete iter;
   db->ReleaseSnapshot(options.snapshot);
-Note that when a snapshot is no longer needed, it should be released using the DB::ReleaseSnapshot interface. This allows the implementation to get rid of state that was being maintained just to support reading as of that snapshot.
-Slice
 
+如果快照不再需要了，需要通过BD::ReleaseSnapshot接口来释放。这样可以摆脱为了支持快照功能而维护的状态(??翻译不通畅)。
+Note that when a snapshot is no longer needed, it should be released using the DB::ReleaseSnapshot interface. This allows the implementation to get rid of state that was being maintained just to support reading as of that snapshot.
+
+Slice (片)
+
+it->key()和it->value()返回的值的类型为leveldb::Slice。 Slice是一个简单的结构体, 它包含一个指向外部数组的指针以及指针长度。返回一个Slice比起返回std::string来性能更高，原因是使用Slice不需要拷贝大量的key或者value。此外, leveldb的函数不会返回C风格的null-terminated字符串。原因是leveldb允许key或者value包含'\0' 字符
 The return value of the it->key() and it->value() calls above are instances of the leveldb::Slice type. Slice is a simple structure that contains a length and a pointer to an external byte array. Returning a Slice is a cheaper alternative to returning a std::string since we do not need to copy potentially large keys and values. In addition, leveldb methods do not return null-terminated C-style strings since leveldb keys and values are allowed to contain '\0' bytes.
 
 C++ strings and null-terminated C-style strings can be easily converted to a Slice:
@@ -168,6 +174,8 @@ Be careful when using Slices since it is up to the caller to ensure that the ext
    }
    Use(slice);
 When the if statement goes out of scope, str will be destroyed and the backing storage for slice will disappear.
+
+
 Comparators
 
 The preceding examples used the default ordering function for key, which orders bytes lexicographically. You can however supply a custom comparator when opening a database. For example, suppose each database key consists of two numbers and we should sort by the first number, breaking ties by the second number. First, define a proper subclass of leveldb::Comparator that expresses these rules:
