@@ -223,31 +223,25 @@ The result of the comparator's Name method is attached to the database when it i
 比较函数的名字在当数据库被创建的时候就确定了。并且随后的每次数据库的打开都会对比较函数名字进行检查，如果比较函数名字改变了, 调用leveldb::DB::open函数会失败。因此只有当新的key的格式和比较函数和现有的数据不兼容时,并且允许丢弃现有的所有数据时才能改变比较函数的名字,
 
 You can however still gradually evolve your key format over time with a little bit of pre-planning. For example, you could store a version number at the end of each key (one byte should suffice for most uses). When you wish to switch to a new key format (e.g., adding an optional third part to the keys processed by TwoPartComparator), (a) keep the same comparator name (b) increment the version number for new keys (c) change the comparator function so it uses the version numbers found in the keys to decide how to interpret them.
-(??没懂,翻译不通顺)不过，你任然可以在前期规划的基础上中逐渐的升级key的格式。比如, 你可以在每个key的结尾添加一个version字段(对大部分用户来说，占用一个字节就够了).当你想要使用新的key格式(比如在key中添加一个可以选的第三个字段??不通顺) (a) 保持比较函数名字不变 (b)对新类型的key增加版本号 (c)改变比较函数,让其可以通过key的版本号来做不同的处理
-
-Performance 性能
+(??没懂,翻译不通顺)不过，你任然可以在前期规划的基础上中逐渐的升级key的格式。比如, 你可以在每个key的结尾添加一个version字段(对大部分用户来说，占用一个字节就够了).当你想要使用新的key格式(比如在key中添加一个可以选的第三个字段??) (a) 保持比较函数名字不变 (b)对新类型的key增加版本号 (c)改变比较函数,让其可以通过key的版本号来做不同的处理
+Performance
 
 Performance can be tuned by changing the default values of the types defined in include/leveldb/options.h.
-可以通过调整在include/leveldb/options.h中定义的变量的值来调整性能
 
-Block size 块大小
+Block size
 
 leveldb groups adjacent keys together into the same block and such a block is the unit of transfer to and from persistent storage. The default block size is approximately 4096 uncompressed bytes. Applications that mostly do bulk scans over the contents of the database may wish to increase this size. Applications that do a lot of point reads of small values may wish to switch to a smaller block size if performance measurements indicate an improvement. There isn't much benefit in using blocks smaller than one kilobyte, or larger than a few megabytes. Also note that compression will be more effective with larger block sizes.
-leveldb 将相邻的key聚集到同一个block中。并且一个block是进/出持久化存储的(最小)单位。默认的块大小近似于4096个未压缩的bytes。如果一个应用大部分使用场景都是对数据库内容进行批量可以将block size调大。如果一个应用大部分使用场景都是读取小数据可以将block size 调小(性能测试结果表明确实有提示的前提下). 将blocks调整到一千字节以内或者几兆字节没有太大好处。还需要说明的是更大的block size对数据压缩有好处。
 
-Compression 压缩
+Compression
 
 Each block is individually compressed before being written to persistent storage. Compression is on by default since the default compression method is very fast, and is automatically disabled for uncompressible data. In rare cases, applications may want to disable compression entirely, but should only do so if benchmarks show a performance improvement:
-每个块在写到持久化存储前都会进行压缩. 由于默认的压缩算法非常快，所以压缩默认是开启的。并且对于不可压缩数据默认会关闭压缩。在极少数的情况下,应用程序想要关闭压缩功能, 但是必须在benchmarks表明有性能提升的情况下再关闭压缩功能。
 
   leveldb::Options options;
   options.compression = leveldb::kNoCompression;
   ... leveldb::DB::Open(options, name, ...) ....
-
-Cache 缓存
+Cache
 
 The contents of the database are stored in a set of files in the filesystem and each file stores a sequence of compressed blocks. If options.cache is non-NULL, it is used to cache frequently used uncompressed block contents.
-数据库的内容存放在一系列的文件中，并且每个文件存储着一系列的压缩的块。如果options.cache 是 non-NULL, 它将用来缓存经常被用到的未经过压缩的数据块内容。
 
   #include "leveldb/cache.h"
 
@@ -260,7 +254,6 @@ The contents of the database are stored in a set of files in the filesystem and 
   delete options.cache;
 Note that the cache holds uncompressed data, and therefore it should be sized according to application level data sizes, without any reduction from compression. (Caching of compressed blocks is left to the operating system buffer cache, or any custom Env implementation provided by the client.)
 When performing a bulk read, the application may wish to disable caching so that the data processed by the bulk read does not end up displacing most of the cached contents. A per-iterator option can be used to achieve this:
-需要说明的是cache保存着未压缩的数据。因此，需要根据应用级数据大小来设置。而不是按照压缩后的大小。(??翻译不通顺, 缓存压缩后的blocks留给操作系统缓冲区或者任何client提供的custom Env 实现)
 
   leveldb::ReadOptions options;
   options.fill_cache = false;
@@ -271,21 +264,15 @@ When performing a bulk read, the application may wish to disable caching so that
 Key Layout
 
 Note that the unit of disk transfer and caching is a block. Adjacent keys (according to the database sort order) will usually be placed in the same block. Therefore the application can improve its performance by placing keys that are accessed together near each other and placing infrequently used keys in a separate region of the key space.
-注意disk transfer和caching的单位都是block。相邻的keys(依赖数据库的排序)往往放到同一个block中。因此应用程序可以通过将一起被访问的keys放到一起以及将不常使用的keys放到一个单独的region中来提高性能(??如何这样做)
 
 For example, suppose we are implementing a simple file system on top of leveldb. The types of entries we might wish to store are:
-比如: 假设我们再leveldb之上实现了一个简单的文件系统。我们想要存储的条目是:
 
    filename -> permission-bits, length, list of file_block_ids
    file_block_id -> data
-
 We might want to prefix filename keys with one letter (say '/') and the file_block_id keys with a different letter (say '0') so that scans over just the metadata do not force us to fetch and cache bulky file contents.
-我们可能想要将filename的key加一个前缀(比如 '/') 将file_block_id的key加另一个前缀(比如'0')。这样的话仅仅扫描metadata的话可以不用缓存笨重的文件内容。
-
-Filters 过滤器
+Filters
 
 Because of the way leveldb data is organized on disk, a single Get() call may involve multiple reads from disk. The optional FilterPolicy mechanism can be used to reduce the number of disk reads substantially.
-由于leveldb的数据组织在磁盘上。一个Get()调用可能会执行多次读磁盘操作。FilterPolicy机制可以用来大幅减少读磁盘的次数。
 
    leveldb::Options options;
    options.filter_policy = NewBloomFilterPolicy(10);
@@ -294,12 +281,8 @@ Because of the way leveldb data is organized on disk, a single Get() call may in
    ... use the database ...
    delete db;
    delete options.filter_policy;
-
 The preceding code associates a Bloom filter based filtering policy with the database. Bloom filter based filtering relies on keeping some number of bits of data in memory per key (in this case 10 bits per key since that is the argument we passed to NewBloomFilterPolicy). This filter will reduce the number of unnecessary disk reads needed for Get() calls by a factor of approximately a 100. Increasing the bits per key will lead to a larger reduction at the cost of more memory usage. We recommend that applications whose working set does not fit in memory and that do a lot of random reads set a filter policy.
-上面的代码对数据库使用了基于布隆过滤器的策略。布隆过滤器为每个key在内存中分配一些bits(在上面的例子中, 因为我们传递给NewBloomFilterPolicy的参数是10，所以每个key有10个bits). 在调用Get操作时布隆过滤器大概会减少100倍不必要的磁盘读取次数。为每个key增加bits可以减少更多的调用次数，代价就是需要耗费更多内存。我们推荐工作集合不适合在内存并且需要做很多随机读操作的应用设置过滤策略。
-
 If you are using a custom comparator, you should ensure that the filter policy you are using is compatible with your comparator. For example, consider a comparator that ignores trailing spaces when comparing keys. NewBloomFilterPolicy must not be used with such a comparator. Instead, the application should provide a custom filter policy that also ignores trailing spaces. For example:
-如果你使用自定义的comparator。需要确保使用的过滤策略跟comparator相匹配。比如, 假设一个comparator在比较key时会忽略结尾的空格.NewBloomFilterPolicy必须不能和这个comparator一起使用。相反，应用必须提供一个自定义的也忽略末尾空格的过滤器。比如:
 
   class CustomFilterPolicy : public leveldb::FilterPolicy {
    private:
@@ -325,26 +308,18 @@ If you are using a custom comparator, you should ensure that the filter policy y
     }
   };
 Advanced applications may provide a filter policy that does not use a bloom filter but uses some other mechanism for summarizing a set of keys. See leveldb/filter_policy.h for detail.
-高级的应用可能提供一个不使用布隆过滤器的过滤策略。而是使用另外的一些机制来管理一系列的key。可以通过查看leveldb/filter_policy.h来获取更多内容。
 
-Checksums 校验
+Checksums
 
 leveldb associates checksums with all data it stores in the file system. There are two separate controls provided over how aggressively these checksums are verified:
-leveldb为再文件系统中存储的每条数据赋予校验值。 (??待翻译)
 
 ReadOptions::verify_checksums may be set to true to force checksum verification of all data that is read from the file system on behalf of a particular read. By default, no such verification is done.
-可以设置ReadOptions::verify_checksums为true来对一个特定的读操作进行强制校验所有从文件系统中去读的的数据。默认情况下是不会校验的。
-
 Options::paranoid_checks may be set to true before opening a database to make the database implementation raise an error as soon as it detects an internal corruption. Depending on which portion of the database has been corrupted, the error may be raised when the database is opened, or later by another database operation. By default, paranoid checking is off so that the database can be used even if parts of its persistent storage have been corrupted.
-可以再打开数据库前设置Options::paranoid_checks为true来确保数据库接口在内部接口遇到坏数据后立即返回错误信息。错误信息可能在数据库打开的时候抛出，也可能在其他数据库操作中抛出，这取决于数据库的哪部分数据坏掉了。默认情况下,paranoid checking是关闭的，以便即使的某一部分持久性存储坏掉了数据库仍然可以使用。
 If a database is corrupted (perhaps it cannot be opened when paranoid checking is turned on), the leveldb::RepairDB function may be used to recover as much of the data as possible
-如果数据库被损坏了(可能在paranoid checking设置为true的时候它没法打开), 可以使用leveldb::RepairDB函数来尽可能的将数据修复
 
-
-Approximate Sizes 近似大小
+Approximate Sizes
 
 The GetApproximateSizes method can used to get the approximate number of bytes of file system space used by one or more key ranges.
-可以使用GetApproximateSizes函数来得到一个key或者某个范围内的key所占用的文件系统的近似大小
 
    leveldb::Range ranges[2];
    ranges[0] = leveldb::Range("a", "c");
@@ -352,9 +327,6 @@ The GetApproximateSizes method can used to get the approximate number of bytes o
    uint64_t sizes[2];
    leveldb::Status s = db->GetApproximateSizes(ranges, 2, sizes);
 The preceding call will set sizes[0] to the approximate number of bytes of file system space used by the key range [a..c) and sizes[1] to the approximate number of bytes used by the key range [x..z).
-    前面的调用会将[a...c]之间的key使用的近似空间大小赋值给sizes[0]，将[x...z]使用的近似大小赋值给sizes[1]
-
-
 Environment
 
 All file operations (and other operating system calls) issued by the leveldb implementation are routed through a leveldb::Env object. Sophisticated clients may wish to provide their own Env implementation to get better control. For example, an application may introduce artificial delays in the file IO paths to limit the impact of leveldb on other activities in the system.
