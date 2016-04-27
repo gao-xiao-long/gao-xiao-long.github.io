@@ -355,10 +355,10 @@ The preceding call will set sizes[0] to the approximate number of bytes of file 
     前面的调用会将[a...c]之间的key使用的近似空间大小赋值给sizes[0]，将[x...z]使用的近似大小赋值给sizes[1]
 
 
-Environment
+Environment 环境
 
 All file operations (and other operating system calls) issued by the leveldb implementation are routed through a leveldb::Env object. Sophisticated clients may wish to provide their own Env implementation to get better control. For example, an application may introduce artificial delays in the file IO paths to limit the impact of leveldb on other activities in the system.
-
+所有通过leveldb的文件操作(或者其他的系统调用)都会传递一个leveldb:Env对象。复杂的客户端有可能想提供自己的Env实现来更好的控制。比如，一个应用可能在IO 上引入人工延迟来限制leveldb对系统里其他活动的冲击(??减少磁盘IO？没懂)
   class SlowEnv : public leveldb::Env {
     .. implementation of the Env interface ...
   };
@@ -367,16 +367,20 @@ All file operations (and other operating system calls) issued by the leveldb imp
   leveldb::Options options;
   options.env = &env;
   Status s = leveldb::DB::Open(options, ...);
-Porting
+
+Porting 移植
 
 leveldb may be ported to a new platform by providing platform specific implementations of the types/methods/functions exported by leveldb/port/port.h. See leveldb/port/port_example.h for more details.
+ 可能会通过实现leveldb/port/port.h中的函数或者类型将leveldb移植到一个到一个新的平台上。查看leveldb/port/port_exampl.h来获取更多的细节
 
 In addition, the new platform may need a new default leveldb::Env implementation. See leveldb/util/env_posix.h for an example.
+另外,一个新的平台可能需要一个新的默认的leveldb::Env的实现。可以参照leveldb/util/env_posix.h中的例子。
 
-Other Information
+Other Information 其他信息
 
 Details about the leveldb implementation may be found in the following documents:
+对leveldb的实现细节感兴趣的话可以看下面的文档
 
-Implementation notes
-Format of an immutable Table file
-Format of a log file
+Implementation notes  实现说明
+Format of an immutable Table file  immutable Table file 的格式
+Format of a log file    log file 的格式
