@@ -154,7 +154,10 @@ is not present in the operating system buffer cache will be dominated
 by the one or two disk seeks needed to fetch the data from disk.
 Write performance will be mostly unaffected by whether or not the
 working set fits in memory.
-
+我们列出了正向顺序读、逆向顺序读及随机读的性能表现。需要说明的是通过基准
+创建的数据库很小，所以这个性能适用于数据集合大小可以放到内存中的情况。读取
+不在操作系统缓冲区的数据时，耗时会被一次或者两次的磁盘seek操作(将数据从磁盘加载到操作系统)影响
+写操作性能大部分不会受是否工作集合大小fit in memery影响。
     readrandom   :      16.677 micros/op;  (approximately 60,000 reads per second)
     readseq      :       0.476 micros/op;  232.3 MB/s
     readreverse  :       0.724 micros/op;  152.9 MB/s
@@ -163,6 +166,8 @@ LevelDB compacts its underlying storage data in the background to
 improve read performance.  The results listed above were done
 immediately after a lot of random writes.  The results after
 compactions (which are usually triggered automatically) are better.
+LevelDB通过在后台压缩底层存储的数据来提高读性能.上面的结果是在大量随机写操作后进行的。
+在压缩后(通常自动进行触发)在执行上述基准结果会更好
 
     readrandom   :      11.602 micros/op;  (approximately 85,000 reads per second)
     readseq      :       0.423 micros/op;  261.8 MB/s
@@ -171,45 +176,62 @@ compactions (which are usually triggered automatically) are better.
 Some of the high cost of reads comes from repeated decompression of blocks
 read from disk.  If we supply enough cache to the leveldb so it can hold the
 uncompressed blocks in memory, the read performance improves again:
+很多耗时比较长的read操作是由于对从磁盘读取的数据重复解压导致的。如果我们为leveldb
+分配足够的cache大小，它就可以将压缩过的数据放到内存，读性能会再次提高。
 
     readrandom   :       9.775 micros/op;  (approximately 100,000 reads per second before compaction)
     readrandom   :       5.215 micros/op;  (approximately 190,000 reads per second after compaction)
 
-## Repository contents
+## Repository contents 库中内容
 
 See doc/index.html for more explanation. See doc/impl.html for a brief overview of the implementation.
+通过doc/index.html获得更多说明。通过doc/impl.html来大概了解实现原理。
 
 The public interface is in include/*.h.  Callers should not include or
 rely on the details of any other header files in this package.  Those
 internal APIs may be changed without warning.
 
-Guide to header files:
+公共的接口在include/*.h中。调用者不应该include或者依赖其他文件中的头文件。那些内部apis可能
+在没有经过任何警告的情况下改变。
+
+Guide to header files:  头文件指南
 
 * **include/db.h**: Main interface to the DB: Start here
+                    DB主要的接口: 从这里开始
 
 * **include/options.h**: Control over the behavior of an entire database,
 and also control over the behavior of individual reads and writes.
+                        控制整个数据库的行为,并且控制独立的读和写的行为
 
 * **include/comparator.h**: Abstraction for user-specified comparison function.
 If you want just bytewise comparison of keys, you can use the default
 comparator, but clients can write their own comparator implementations if they
 want custom ordering (e.g. to handle different character encodings, etc.)
+                            用户自定义的比较函数的抽象。如果你想按字节序对key进行比较
+                            可以使用默认的比较器,如果用户想要自己定义排序规则(比如处理不同的字符编码)
+                            可以实现自己的比较器
 
 * **include/iterator.h**: Interface for iterating over data. You can get
 an iterator from a DB object.
+                          遍历数据的接口，可以获得一个DB的迭代器
 
 * **include/write_batch.h**: Interface for atomically applying multiple
 updates to a database.
+                            原子更新多个数据库改动的接口
 
 * **include/slice.h**: A simple module for maintaining a pointer and a
 length into some other byte array.
+                       用于维护指向其他byte array的指针和及指针长度的简单模块(??翻译不通顺)
 
 * **include/status.h**: Status is returned from many of the public interfaces
 and is used to report success and various kinds of errors.
+                        很多公共接口会返回Status类型，它用来指示调用成功或者多种错误。
 
 * **include/env.h**:
 Abstraction of the OS environment.  A posix implementation of this interface is
 in util/env_posix.cc
+OS环境的抽象接口。一个posix实现在util/evn_posix.cc中。
 
 * **include/table.h, include/table_builder.h**: Lower-level modules that most
 clients probably won't use directly
+                                                大部分用户不会使用的底层模块
