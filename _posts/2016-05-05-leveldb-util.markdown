@@ -1,6 +1,6 @@
 ---
 layout: post
-title: leveldb源码剖析(1)--util
+title: leveldb源码剖析(1)--通用模块(util)
 date: 2016-5-5
 author: "gao-xiao-long"
 catalog: true
@@ -45,3 +45,15 @@ port::AtomicPointer memory_usage_; // arena使用内存大小
     - 如果bytes小于 kBlockSize /4 则通过系统调用申请kBlockSize大小, 将申请的内存挂接到block_中，然后调整alloc_ptr_位置及alloc_bytes_remaining_大小
 
 从上述实现来看arena仅实现了Allocate接口，没有对应的Free及内存整理等功能，是为leveldb高度定制的。非常适合小块内存的申请。
+
+#Status
+
+#Slice
+
+#Bloom Filter
+
+#LRU cache
+
+#ENV&EVN_POSIX
+
+#LOG&logging
