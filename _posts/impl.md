@@ -1,3 +1,4 @@
+其他可参考的译文(http://duanple.blog.163.com/blog/static/70971767201171705113636/)
 The implementation of leveldb is similar in spirit to the representation of a single Bigtable tablet (section 5.3). However the organization of the files that make up the representation is somewhat different and is explained below.
 leveldb的实现跟Bigtable中单个tablet(section 5.3)比较像。只是文件的组织形式有些不同。下面是leveldb文件组织的说明:
 Each database is represented by a set of files stored in a directory. There are several different types of files as documented below:

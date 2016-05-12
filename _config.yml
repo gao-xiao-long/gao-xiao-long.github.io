@@ -39,6 +39,7 @@ gems: [jekyll-paginate]
 # document: http://jekyllrb.com/docs/configuration/#kramdown
 markdown_ext: "markdown,mkdown,mkdn,mkd,md"
 #markdown: kramdown
+markdown: redcarpet
 #kramdown:
 #  input: GFM                            # use Github Flavored Markdown !important
 

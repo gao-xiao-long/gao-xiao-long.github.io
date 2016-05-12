@@ -44,16 +44,25 @@ port::AtomicPointer memory_usage_; // arena使用内存大小
     - 如果bytes大于 kBlockSize / 4 (kBlockSize默认为4096), 则直接通过系统调用申请bytes大小, 并将申请的内存挂接到block_中
     - 如果bytes小于 kBlockSize /4 则通过系统调用申请kBlockSize大小, 将申请的内存挂接到block_中，然后调整alloc_ptr_位置及alloc_bytes_remaining_大小
 
-从上述实现来看arena仅实现了Allocate接口，没有对应的Free及内存整理等功能，是为leveldb高度定制的。非常适合小块内存的申请。
+**从上述实现来看arena仅实现了Allocate接口，没有对应的Free及内存整理等功能，是为leveldb高度定制的。非常适合小块内存的申请。**
+
+
+#LRU cache
+1. 与2的余数计算方式 a&(length-1)
+2. C++柔型数组 char key_data[1]的用法
+3. 分成16个shadle防止多线程加锁
+4. refs的作用， next_hash、next、prev、hash的作用
+5. insert时如果key存在会怎么处理。(返回旧的handle，可以用于后面删除？)
+6. resize是如何做的？？
+7. 空结构体struct Handle {}; 的意义是啥
+8. Cache中Prune() ? sharedhash如何hash到不同槽位？
+9. 两种强制类型转换不不同点
+#ENV&EVN_POSIX
+
+#LOG&logging
 
 #Status
 
 #Slice
 
 #Bloom Filter
-
-#LRU cache
-
-#ENV&EVN_POSIX
-
-#LOG&logging
