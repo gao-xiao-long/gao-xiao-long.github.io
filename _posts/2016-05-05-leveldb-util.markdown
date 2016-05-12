@@ -10,7 +10,7 @@ tags:
 
 leveldb util目录中提供了通用功能的实现，比如内存管理(arena), 布隆过滤器(bloom), cache等，下面对这些通用功能的实现做下简单的分析。
 
-# arena
+# Arena
 
 arena是leveldb中实现的一个简单的内存管理器, 对外部暴露如下三个接口:
 
@@ -47,7 +47,7 @@ port::AtomicPointer memory_usage_; // arena使用内存大小
 **从上述实现来看arena仅实现了Allocate接口，没有对应的Free及内存整理等功能，是为leveldb高度定制的。非常适合小块内存的申请。**
 
 
-# LRU cache
+# LRU Cache
 
 leveldb默认使用LRU(least recently used)缓存策略。构造LRU cache的基本数据结构主要有
 
@@ -99,10 +99,12 @@ Slice(key_data, key_length); // 这样使用就可以获取key值。
 ```
 
 **HandleTable**
+
 leveldb实现了一个简单的hashtable。原因有两个: 1. 与平台无关，不需要考虑移植。2. 在一些编译器(如gcc4.4.3)上比内置
 的hashtable版本更快。
 内部实现逻辑比较简单，维护了一个LRUHandle的链表，并采用拉链法来解决hash冲突。
 主要变量为:
+
 ```C++
 uint32_t length_;   // hash链表长度
 uint32_t elems_;    // hash链表中当前元素个数
@@ -111,6 +113,7 @@ LRUHandle** list_;  // hash链表指针
 默认list_长度大小为4，当elems_达到length_时每次按照2的倍数重新申请空间。
 
 主要接口为:
+
 ```C++
 LRUHandle* Lookup(const Slice& key, uint32_t hash) // 查找key,返回节点指针
 LRUHandle* Insert(LRUHandle* h)                    // 插入key, 如果key存在,返回NULL，否则返回key对应的
@@ -118,8 +121,10 @@ LRUHandle* Insert(LRUHandle* h)                    // 插入key, 如果key存在
 LRUHandle* Remove(const Slice& key, uint32_t hash) // 删除key，返回要删除的LRUHandle指针(后续可以将其释放)
 LRUHandle** FindPointer(const Slice& key, uint32_t hash) // 内部接口，返回key在list_中的位置
 ```
+
 leveldb在FindPointer中使用了一个小技巧,在length_为2的倍数时，可以通过 hash & (length_ -1) 来找到对应的的list_位置。
 这比使用 hash%length_ 运算起来更快。
+
 ```C++
 LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
@@ -135,8 +140,6 @@ LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
 
 
 
-1. 与2的余数计算方式 a&(length-1)
-2. C++柔型数组 char key_data[1]的用法
 3. 分成16个shadle防止多线程加锁
 4. refs的作用， next_hash、next、prev、hash的作用
 5. insert时如果key存在会怎么处理。(返回旧的handle，可以用于后面删除？)
