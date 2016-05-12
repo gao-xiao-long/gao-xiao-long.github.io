@@ -135,10 +135,19 @@ LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
     return ptr;
   }
 ```
+HandleTable的结构如下:
+![结构图](/img/in-post/leveldb/hashtable.png)
 
+**LRUCache**
+LRUCache使用双向链表来实现LRU的功能，主要成员函数如下:
 
-
-
+```C++
+  size_t capacity_;             // LRU Cache的总容量大小
+  mutable port::Mutex mutex_;   // 用于保护下面三个变量状态
+  size_t usage_;                // LRU Cache的使用量
+  LRUHandle lru_;               // 双向链表的傀儡节点，lru.prev指向最新被访问过的实体，lru.next指向最旧的实体
+  HandleTable table_;           // 存储实体的hash表
+```
 
 3. 分成16个shadle防止多线程加锁
 4. refs的作用， next_hash、next、prev、hash的作用
