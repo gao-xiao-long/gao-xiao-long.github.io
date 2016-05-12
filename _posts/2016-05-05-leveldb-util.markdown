@@ -1,6 +1,6 @@
 ---
 layout: post
-title: leveldb源码剖析(1)--通用模块(util)
+title: leveldb源码(1.18)剖析--通用模块(util)
 date: 2016-5-5
 author: "gao-xiao-long"
 catalog: true
@@ -12,7 +12,7 @@ leveldb util目录中提供了通用功能的实现，比如内存管理(arena),
 
 # arena
 
-leveldb自身实现了一个简单的内存管理器, 对外部暴露如下三个接口:
+arena是leveldb中实现的一个简单的内存管理器, 对外部暴露如下三个接口:
 
 ```C++
 char* Allocate(size_t bytes); // 分配指定大小内存
@@ -47,7 +47,57 @@ port::AtomicPointer memory_usage_; // arena使用内存大小
 **从上述实现来看arena仅实现了Allocate接口，没有对应的Free及内存整理等功能，是为leveldb高度定制的。非常适合小块内存的申请。**
 
 
-#LRU cache
+# LRU cache
+
+leveldb默认使用LRU(least recently used)缓存策略。构造LRU cache的基本数据结构主要有
+
+```C++
+LRUHandle    // 底层数据结构，被索引的实体信息，包含key、value、引用次数等
+HandleTable  // 底层数据结构，索引LRUHandle的哈希表
+LRUCache     // 以LRUHandle及HandleTable为基础的LRU cache具体实现
+ShardedLRUCache // 管理多个LRUCache的类(适用于多线程访问场景，减少线程争用)
+```
+
+**LRUHanle的数据结构如下**
+
+```C++
+struct LRUHandle {
+  void* value;  // key-value结构中的value值
+  void (*deleter)(const Slice&, void* value); // 实体被销毁前调用的函数, 由外部传入
+  LRUHandle* next_hash; // HashTable中用到，用于解决hash冲突
+  LRUHandle* next;      // HashCache中用到，用于实现LRU淘汰策略
+  LRUHandle* prev;      // HashCache中用到，用于实现LRU淘汰策略
+  size_t charge;        // 节点占用的内存
+  size_t key_length;    //  key的长度，用于跟key_data联合使用
+  uint32_t refs;        // 引用计数，用于记录此节点被引用的次数
+  uint32_t hash;      //  key对应的hash值，HashTable和ShardedLRUCache都用得到
+  char key_data[1];   //  key的起始内存地址
+
+  Slice key() const {
+    // For cheaper lookups, we allow a temporary Handle object
+    // to store a pointer to a key in "value".
+    if (next == this) {
+      return *(reinterpret_cast<Slice*>(value));
+    } else {
+      return Slice(key_data, key_length);
+    }
+  }
+};
+```
+LRUHandle数据结构中有一个需要特别说明的地方就是通过key_data和key_length来获得key值：由于key值是边长的，
+不能通过指定一个大小，比如char key_data[100]来存储key的值，那样会造成空间浪费或key截断。有一种方法就是
+将key_data也声明成char* 用来指向一个存储key值的地址，但需要为key再单独malloc一次空间，且LRUHandle与为key
+malloc的空间不连续。系统采用了一个比较巧妙的方法，就是在为LRUHandle申请空间时多申请了（key_length-1)个字节
+的空间(需要通过reinterpret_cast转换成LRUHandle指针),然后从以key_data起始内存地址开始，拷贝实际的key值到后续空间。
+
+```
+LRUHandle* e = reinterpret_cast<LRUHandle*>(malloc(sizeof(LRUHandle)-1 + key.size()));  // 多分配key.size() - 1
+memcpy(e->key_data, key.data(), key.size()); // 拷贝key值到key_data开始的内存空间中。
+
+Slice(key_data, key_length); // 这样使用就可以获取key值。
+
+```
+
 1. 与2的余数计算方式 a&(length-1)
 2. C++柔型数组 char key_data[1]的用法
 3. 分成16个shadle防止多线程加锁
