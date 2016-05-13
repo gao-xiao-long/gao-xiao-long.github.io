@@ -60,17 +60,6 @@ Slice(key_data, key_length); // 这样使用就可以获取key值。
 
 ```
 
-(**下面部分翻译自rocksdb文档**)动态分配的LRUHandle可能会有以下状态:
-
-1. 外部有引用且在hashtable中(refs >  1 && in_cache == true)
-2. 没有被外部引用并且在hash表中(refs == 1 && in_cache == true)
-3. 被外部引用了并且不在hash表中(refs >= 1 && in_cache == false)
-
-所有新创建的LRUHandle的状态都是1. 如果对处在状态1的实体调用了LRUCache::Release，它将会进入状态2.
-对实体调用LRUCache::Erase，状态会从1到3,对相同的key调用LRUCache::Insert也会使状态从1到3
-对处在状态2的实体调用LRUCache::Lookup，状态会重新变为1
-在析构LRUCache之前，要确保所有的实体状态都不为1。
-
 
 
 ## HandleTable
@@ -210,6 +199,18 @@ virtual Handle* Lookup(const Slice& key) {
     return shard_[Shard(hash)].Lookup(key, hash); // 在shard中查找
 }
 ```
+
+(**下面部分翻译自rocksdb文档**)动态分配的LRUHandle可能会有以下状态:
+
+* 外部有引用且在hashtable中(refs >  1 && in_cache == true)
+* 没有被外部引用并且在hash表中(refs == 1 && in_cache == true)
+* 被外部引用了并且不在hash表中(refs >= 1 && in_cache == false)
+
+所有新创建的LRUHandle的状态都是1. 如果对处在状态1的实体调用了LRUCache::Release，它将会进入状态2.
+对实体调用LRUCache::Erase，状态会从1到3,对相同的key调用LRUCache::Insert也会使状态从1到3
+对处在状态2的实体调用LRUCache::Lookup，状态会重新变为1
+
+在析构LRUCache之前，要确保所有的实体状态都不为1。
 
 #ENV&EVN_POSIX
 
