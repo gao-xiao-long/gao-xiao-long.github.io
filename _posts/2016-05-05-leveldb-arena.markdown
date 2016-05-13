@@ -9,7 +9,7 @@ tags:
     - arena
 ---
 
-leveldb util目录中提供了通用功能的实现，比如内存管理(arena), 布隆过滤器(bloom), cache等，下面对这些通用功能的实现做下简单的分析。
+leveldb util目录中提供了通用功能的实现，比如内存管理(arena), 布隆过滤器(bloom), cache等，下面对这内存管理器Arena进行分析
 
 arena是leveldb中实现的一个简单的内存管理器, 对外部暴露如下三个接口:
 

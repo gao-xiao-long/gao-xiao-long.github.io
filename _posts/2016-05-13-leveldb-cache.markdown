@@ -60,6 +60,18 @@ Slice(key_data, key_length); // 这样使用就可以获取key值。
 
 ```
 
+(**下面翻译自rocksdb文档**)动态分配的LRUHandle可能会有以下状态:
+1. 外部有引用且在hashtable中(refs >  1 && in_cache == true)
+2. 没有被外部引用并且在hash表中(refs == 1 && in_cache == true)
+3. 被外部引用了并且不在hash表中(refs >= 1 && in_cache == false)
+所有新创建的LRUHandle的状态都是1. 如果对处在状态1的实体调用了LRUCache::Release，它将会进入状态2.
+对实体调用LRUCache::Erase，状态会从1到3,对相同的key调用LRUCache::Insert也会使状态从1到3
+对处在状态2的实体调用LRUCache::Lookup，状态会重新变为1
+在析构LRUCache之前，要确保所有的实体状态都不为1。这意味着所有成功的LRUCache::Lookup/LRUCache::Insert都必须有
+配对的LRUCache::Release(将状态变为2)或者LRUCache::Erase(将状态变为3)操作。
+
+
+
 ## HandleTable
 
 leveldb实现了一个简单的hashtable。原因有两个: 1. 与平台无关，不需要考虑移植。2. 在一些编译器(如gcc4.4.3)上比内置
