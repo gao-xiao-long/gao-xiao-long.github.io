@@ -200,7 +200,8 @@ virtual Handle* Lookup(const Slice& key) {
 }
 ```
 
-(**下面部分翻译自rocksdb文档**)动态分配的LRUHandle可能会有以下状态:
+**下面部分翻译自rocksdb文档:**
+动态分配的LRUHandle可能会有以下状态:
 
 * 外部有引用且在hashtable中(refs >  1 && in_cache == true)
 * 没有被外部引用并且在hash表中(refs == 1 && in_cache == true)
