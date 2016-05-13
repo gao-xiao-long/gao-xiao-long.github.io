@@ -210,7 +210,6 @@ virtual Handle* Lookup(const Slice& key) {
 所有新创建的LRUHandle的状态都是1. 如果对处在状态1的实体调用了LRUCache::Release，它将会进入状态2.
 对实体调用LRUCache::Erase，状态会从1到3,对相同的key调用LRUCache::Insert也会使状态从1到3
 对处在状态2的实体调用LRUCache::Lookup，状态会重新变为1
-
 在析构LRUCache之前，要确保所有的实体状态都不为1。
 
 #ENV&EVN_POSIX
