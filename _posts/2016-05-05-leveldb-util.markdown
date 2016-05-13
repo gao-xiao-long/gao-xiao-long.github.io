@@ -59,6 +59,7 @@ ShardedLRUCache // 管理多个LRUCache的类(适用于多线程访问场景，�
 ```
 
 **LRUHanle**
+
 数据结构如下
 
 ```C++
@@ -140,6 +141,7 @@ HandleTable的结构如下:
 ![结构图](/img/in-post/leveldb/hashtable.png)
 
 **LRUCache**
+
 LRUCache主要成员函数如下:
 
 ```C++
@@ -191,6 +193,7 @@ LRUCache对外主要提供以下接口
 ```
 
 **Insert操作主要流程:**
+
 * 加锁(MutexLock l(&mutex_))
 * 根据传入的信息动态生成一个新LRUHandle
 * 将LRUHandle插入lru链表中(LRU_Append)
@@ -200,12 +203,14 @@ LRUCache对外主要提供以下接口
 * 返回指向LRUHandle的指针
 
 **Lookup操作主要流程:**
+
 * 加锁(MutexLock l(&mutex_))
 * 调用table_.Lookup看是否存在
 * 如果存在(返回为e)，移动对应LRUHandle在lru_中位置(LRU_Remove(e); LRU_Append(e)) 这样e即移动到了链表最后
 * 返回指向LRUHandle的指针(e)
 
 **SharedLRUCache**
+
 为了加速多线程查找速度(每次LRUCache调用都需要互斥锁)以及减少Hash冲突
 ShardedLRUCache将16个LRUCache对象放到一起(shard)，然后根据key的前四个字节(最多可以代表16)选择不同shard。
 关键的数据结构和函数如下:
