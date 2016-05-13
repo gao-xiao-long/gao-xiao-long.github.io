@@ -58,7 +58,7 @@ LRUCache     // 以LRUHandle及HandleTable为基础的LRU cache具体实现
 ShardedLRUCache // 管理多个LRUCache的类(适用于多线程访问场景，减少线程争用)
 ```
 
-**LRUHanle**
+### LRUHanle
 
 数据结构如下
 
@@ -100,7 +100,7 @@ Slice(key_data, key_length); // 这样使用就可以获取key值。
 
 ```
 
-**HandleTable**
+### HandleTable
 
 leveldb实现了一个简单的hashtable。原因有两个: 1. 与平台无关，不需要考虑移植。2. 在一些编译器(如gcc4.4.3)上比内置
 的hashtable版本更快。
@@ -140,7 +140,7 @@ LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
 HandleTable的结构如下:
 ![结构图](/img/in-post/leveldb/hashtable.png)
 
-**LRUCache**
+### LRUCache
 
 LRUCache主要成员函数如下:
 
@@ -209,7 +209,7 @@ LRUCache对外主要提供以下接口
 * 如果存在(返回为e)，移动对应LRUHandle在lru_中位置(LRU_Remove(e); LRU_Append(e)) 这样e即移动到了链表最后
 * 返回指向LRUHandle的指针(e)
 
-**SharedLRUCache**
+### SharedLRUCache
 
 为了加速多线程查找速度(每次LRUCache调用都需要互斥锁)以及减少Hash冲突
 ShardedLRUCache将16个LRUCache对象放到一起(shard)，然后根据key的前四个字节(最多可以代表16)选择不同shard。
