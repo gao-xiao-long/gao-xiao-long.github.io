@@ -58,7 +58,8 @@ LRUCache     // 以LRUHandle及HandleTable为基础的LRU cache具体实现
 ShardedLRUCache // 管理多个LRUCache的类(适用于多线程访问场景，减少线程争用)
 ```
 
-**LRUHanle的数据结构如下**
+**LRUHanle**
+数据结构如下
 
 ```C++
 struct LRUHandle {
@@ -139,7 +140,7 @@ HandleTable的结构如下:
 ![结构图](/img/in-post/leveldb/hashtable.png)
 
 **LRUCache**
-LRUCache使用双向链表来实现LRU的功能，主要成员函数如下:
+LRUCache主要成员函数如下:
 
 ```C++
   size_t capacity_;             // LRU Cache的总容量大小
@@ -149,13 +150,89 @@ LRUCache使用双向链表来实现LRU的功能，主要成员函数如下:
   HandleTable table_;           // 存储实体的hash表
 ```
 
-3. 分成16个shadle防止多线程加锁
-4. refs的作用， next_hash、next、prev、hash的作用
-5. insert时如果key存在会怎么处理。(返回旧的handle，可以用于后面删除？)
-6. resize是如何做的？？
-7. 空结构体struct Handle {}; 的意义是啥
-8. Cache中Prune() ? sharedhash如何hash到不同槽位？
-9. 两种强制类型转换不不同点
+LRUCache使用双向链表lru_来实现LRU的功能, table_则存储LRUHandle实体。
+lru_某一状态下结构图如下:
+![结构图](/img/in-post/leveldb/lru.png)
+其中lru_为傀儡节点，本身不存储数据。的next指针指向最旧的Handle。prev指针指向最近被访问过的Handle。每当插入(LRUAppend)一个新的Handle时，都会插入到双向链表
+的末尾，且改变lru_的prev指针指向最新插入的Handle。具体的Append和Remove操作如下:
+
+```C++
+//添加节点到lru_双向链表中
+void LRUCache::LRU_Append(LRUHandle* e) {
+  // Make "e" newest entry by inserting just before lru_
+  e->next = &lru_;
+  e->prev = lru_.prev;
+  e->prev->next = e;
+  e->next->prev = e;
+}
+
+//从lru_双向链表中删除节点
+void LRUCache::LRU_Remove(LRUHandle* e) {
+  e->next->prev = e->prev;
+  e->prev->next = e->next;
+}
+```
+
+可以对照上述结构图来模拟下LRU_Append及LRU_Remove操作。
+
+LRUCache对外主要提供以下接口
+
+```C++
+ // 插入key到Cache中，并返回内部生成的Handle
+ Cache::Handle* Insert(const Slice& key, uint32_t hash,
+                        void* value, size_t charge,
+                        void (*deleter)(const Slice& key, void* value));
+
+  Cache::Handle* Lookup(const Slice& key, uint32_t hash);
+  void Release(Cache::Handle* handle);
+  void Erase(const Slice& key, uint32_t hash);
+  void Prune();
+
+```
+
+**Insert操作主要流程:**
+* 加锁(MutexLock l(&mutex_))
+* 根据传入的信息动态生成一个新LRUHandle
+* 将LRUHandle插入lru链表中(LRU_Append)
+* 将LRUHandle插入table_中(table_.Insert())
+* 如果table_中存在相同key(Insert函数不返回空)从lru中删除旧值(LRU_Remove)
+* 如果LRUCache当前容量不足(usage_ > capacity) 则循环删除最旧数据(lru_.next)直到空间够用或lru为空
+* 返回指向LRUHandle的指针
+
+**Lookup操作主要流程:**
+* 加锁(MutexLock l(&mutex_))
+* 调用table_.Lookup看是否存在
+* 如果存在(返回为e)，移动对应LRUHandle在lru_中位置(LRU_Remove(e); LRU_Append(e)) 这样e即移动到了链表最后
+* 返回指向LRUHandle的指针(e)
+
+**SharedLRUCache**
+为了加速多线程查找速度(每次LRUCache调用都需要互斥锁)以及减少Hash冲突
+ShardedLRUCache将16个LRUCache对象放到一起(shard)，然后根据key的前四个字节(最多可以代表16)选择不同shard。
+关键的数据结构和函数如下:
+
+```C++
+static const int kNumShardBits = 4;
+static const int kNumShards = 1 << kNumShardBits;  // 位操作技巧
+class ShardedLRUCache : public Cache {
+private:
+   LRUCache shard_[kNumShards];
+  ......
+
+static uint32_t Shard(uint32_t hash) {  //根据key的前4个字节来选择不同shard
+    return hash >> (32 - kNumShardBits);
+}
+
+virtual Handle* Insert(const Slice& key, void* value, size_t charge,
+                         void (*deleter)(const Slice& key, void* value)) {
+    const uint32_t hash = HashSlice(key); // 选择shard
+    return shard_[Shard(hash)].Insert(key, hash, value, charge, deleter); //插入shard中
+}
+virtual Handle* Lookup(const Slice& key) {
+    const uint32_t hash = HashSlice(key); // 选择shard
+    return shard_[Shard(hash)].Lookup(key, hash); // 在shard中查找
+}
+```
+
 #ENV&EVN_POSIX
 
 #LOG&logging
