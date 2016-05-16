@@ -171,6 +171,19 @@ LRUCache对外主要提供以下接口
 * 如果存在(返回为e)，移动对应LRUHandle在lru_中位置(LRU_Remove(e); LRU_Append(e)) 这样e即移动到了链表最后
 * 返回指向LRUHandle的指针(e)
 
+**下面部分翻译自rocksdb文档:**
+
+动态分配的LRUHandle可能会有以下状态:
+
+* 外部有引用且在hashtable中(refs >  1 && in_cache == true)
+* 没有被外部引用并且在hash表中(refs == 1 && in_cache == true)
+* 被外部引用了并且不在hash表中(refs >= 1 && in_cache == false)
+
+所有新创建的LRUHandle的状态都是1. 如果对处在状态1的实体调用了LRUCache::Release，它将会进入状态2.
+对实体调用LRUCache::Erase，状态会从1到3,对相同的key调用LRUCache::Insert也会使状态从1到3
+对处在状态2的实体调用LRUCache::Lookup，状态会重新变为1
+在析构LRUCache之前，要确保所有的实体状态都不为1。
+
 ## SharedLRUCache
 
 为了加速多线程查找速度(每次LRUCache调用都需要互斥锁)以及减少Hash冲突
@@ -200,25 +213,7 @@ virtual Handle* Lookup(const Slice& key) {
 }
 ```
 
-**下面部分翻译自rocksdb文档:**
-
-动态分配的LRUHandle可能会有以下状态:
-
-* 外部有引用且在hashtable中(refs >  1 && in_cache == true)
-* 没有被外部引用并且在hash表中(refs == 1 && in_cache == true)
-* 被外部引用了并且不在hash表中(refs >= 1 && in_cache == false)
-
-所有新创建的LRUHandle的状态都是1. 如果对处在状态1的实体调用了LRUCache::Release，它将会进入状态2.
-对实体调用LRUCache::Erase，状态会从1到3,对相同的key调用LRUCache::Insert也会使状态从1到3
-对处在状态2的实体调用LRUCache::Lookup，状态会重新变为1
-在析构LRUCache之前，要确保所有的实体状态都不为1。
 
 #ENV&EVN_POSIX
 
 #LOG&logging
-
-#Status
-
-#Slice
-
-#Bloom Filter
