@@ -212,8 +212,3 @@ virtual Handle* Lookup(const Slice& key) {
     return shard_[Shard(hash)].Lookup(key, hash); // 在shard中查找
 }
 ```
-
-
-#ENV&EVN_POSIX
-
-#LOG&logging
