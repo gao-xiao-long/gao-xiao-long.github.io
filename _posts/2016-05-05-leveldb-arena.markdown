@@ -89,5 +89,6 @@ BBS/Data segment/Textsegment等段不再讲述
 3.[内存空间布局](http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/)
 
 4.[A malloc Tutorial](http://www.inf.udec.cl/~leo/Malloc_tutorial.pdf)
+
 5.[Glibc 内存管理](http://www.valleytalk.org/wp-content/uploads/2015/02/glibc%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86ptmalloc%E6%BA%90%E4%BB%A3%E7%A0%81%E5%88%86%E6%9E%901.pdf)
 
