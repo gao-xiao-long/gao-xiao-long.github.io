@@ -1,12 +1,12 @@
 ---
 layout: post
 title: leveldb1.18源码剖析--log format
-date: 2016-4-13
+date: 2016-6-20
 author: "gao-xiao-long"
 catalog: false
 tags:
-    - IO
-    - 性能优化
+    - leveldb
+    - log format
 ---
 
 LevelDB中日志文件(*.log)存储了对DB的更新操作，每次write操作，会先写log文件，然后伺机合并。
@@ -33,21 +33,21 @@ B: length 97270
 C: length 8000
 
 如下图所示:A记录将会在第一个block中填充为FULL类型。B记录将会被切分成3个fragment。第一个fragment占据了第一个block剩余的空间;第二个fragment占满了第二个block。第三个fragment占据了第三个block的前半部分,第三个block还会剩余6个空闲字节，将会被填充为zero type来作为尾部。C记录将会被填充费FULL类型，占据第四个block。
-![整体结构图](/img/in-post/block-format.png)
+![整体结构图](/img/in-post/leveldb/block-format.png)
 
 ### 具体实现(db/log_format.h db/log_writer.h db/log_reader.h)
 
 **log_format**
 内容比较简单，定义了record type及block size等
-![log_format](/img/in-post/log-format.png)
+![log_format](/img/in-post/leveldb/log-format.png)
 
 **Writer类**
 Writer类对外只暴露AddRecord接口，即向文件中添加记录，具体实现不表，倒是实际负责文件写操作的WritableFile在Linux下的实现PosixWritableFile(util/env_posix.cc)值得一讲。
 PosixWritableFile主要由3个成员函数:Append/Flush/Sync。其中Append和Flush的实现如下:
-![append/flush](/img/in-post/append_flush.png)
+![append/flush](/img/in-post/leveldb/append_flush.png)
 *从上面的实现中可以看出，leveldb使用了不加锁的标准I/O操作fwrite_unlocked()与fflush_unlocked(), 这会带来可观的性能提升。在设计应用时，考虑把所有的I/O委托给单个线程(或者吧所有的I/O委托给线程池，每个流映射到线程池中的一个线程)就可以使用不加锁I/O来提升性能。关于多线程安全，可以参考[理解文件I/O-topic5](http://gao-xiao-long.github.io/2016/04/13/file-io/#topic5-io)
 Sync的实现如下
-![sync](/img/in-post/write_sync.png)
+![sync](/img/in-post/leveldb/write_sync.png)
 这里既有Flush又有Sync的原因是PosixWriter实现使用了C标准I/O库，应用层又多了层缓冲,Flush操作将应用层缓冲数据写到到内核缓冲。Sync操作则将内核缓冲数据写到磁盘。在刷新内核数据时分别使用了fdatasync()以及fsync()命令。且Sync文件的同时对文件所在的目录也执行了fsync()命令，具体原因可以参考[理解文件I/O-topic4](http://gao-xiao-long.github.io/2016/04/13/file-io/#topic4-io)
 **Reader类**
 Reader类提供ReadRecord来读取一个记录，第一次读取时，根据initial_offset跳过log文件开始。每次读取的record都是一个完成record(比如会对kFirstType/kMiddleType/kLastType进行拼接)，读取过程中如果遇到BadRecord，会将此record连同record所在的整个block一起丢弃。leveldb判定为BadRecord的情形有:
