@@ -23,17 +23,20 @@ log文件由一系列的block组成，每个block大小为32KB。每个block包�
     data:     uint8[length]   // 实际存储的数据
 ```
 
-说明:
+
     * 记录实际的数据存储是从第8个字节开始的（前7个字节存储记录header信息）
+
     * 记录永远不会从一个block的最后6个字节开始(无法存储完整的checksum/length/type)。如果一个block还剩余或者不满6个字节
+
 ，则剩余部分会被填充 zero bytes('\0'),并且在读取的时候跳过。
     * 如果当前block正好剩余7个字节，并且一个长度不为0的记录要添加进来，则会在此block的后7个字节里填充type为FIRST,length为0。
+
 此记录的data将会在随后的block中填充。
     * type为FULL的记录保存了用户的所有数据;type为FIRST/MIDDLE/LAST时,用户记录被切分为不同的fragment(往往是由于record在block的边界)。FIRST代表是记录的第一个fragment, LAST表示是一个记录的最后一个fragment,MIDDLE代表是记录的中间fragments。
 
-举例:
 
-有如下一系列的用户记录:
+
+假设有如下一系列的用户记录:
 
 ```C++
 A: length 1000
@@ -43,7 +46,7 @@ C: length 8000
 
 如下图所示:
 A记录将会在第一个block中填充为FULL类型。B记录将会被切分成3个fragment。第一个fragment占据了第一个block剩余的空间;第二个fragment占满了第二个block;第三个fragment占据了第三个block的前半部分;第三个block还会剩余6个空闲字节，将会被填充为zero type来作为尾部。C记录将会被填充费FULL类型，占据第四个block。
-![整体结构图](/img/in-post/leveldb/block-format.png)
+![整体结构图](/img/in-post/leveldb/block_format.png)
 
 ### 具体实现(db/log_format.h db/log_writer.h db/log_reader.h)
 
