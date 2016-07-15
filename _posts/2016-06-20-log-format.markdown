@@ -9,7 +9,7 @@ tags:
     - log format
 ---
 
-LevelDB中日志文件(*.log)存储了对DB的更新操作，每次write操作，会先写log文件，然后伺机合并。
+LevelDB中日志文件(*.log)存储了对DB的更新操作，log文件的主要作用是防止系统崩溃后数据的丢失。每次write操作，都会先写log文件，再记入内存中，这样即使系统崩溃，也可以从log文件中恢复数据。
 
 ### log文件格式
 
