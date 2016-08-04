@@ -1,4 +1,45 @@
-单个SSTable文件的格式如上图所示，文件由五大部分组成：Data Blocks, Meta Blocks, MetaIndexBlock, DataIndexBlock, Footer。除Footer部分外，其余都是一些block组成的结构，每个block是由多个KeyValue组成的数据块。文件包含一些内部指针。每个这样的指针被称为一个BlockHandle，包含如下信息：
+---
+layout: post
+title: leveldb1.18源码剖析--SSTable格式详解
+date: 2016-7-9
+author: "gao-xiao-long"
+catalog: true
+tags:
+    - leveldb
+    - sstable
+---
+
+SSTable简称为Sorted String Table，用来存储一系列有序Kev-Value对。LevelDb中不同层级下有多个SSTable文件(.sst)，下面介绍单个SSTable文件的静态结构。
+
+![结构图](/img/in-post/leveldb/sstable.png)
+
+单个SSTable文件的格式如上图所示，文件由五大部分组成：Data Blocks, Meta Blocks, MetaIndexBlock, DataIndexBlock, Footer。其中：
+Data Blocks: 存储一系列的按序排列的Key-Value数据
+Meta Blocks: ??待补充 如果数据库打开时指定了过滤策略(FilterPolicy)则存储一系列的filter
+MetaIndexBlocks:  ??待补充
+DataIndexBlocks: ??待补充
+Footer: 固定大小，??待补充
+下面对这五大块进行详细的讲解
+
+## Data Block
+
+Data Block是基于block_builder.cc生成的。存储了有序的Key-Value对，内部的基本结构如下:
+
+![结构图](/img/in-post/leveldb/data_block.png)
+
+其中
+
+* block data为实际的key-value值
+
+* type目前只有0或者1。0表示block数据未压缩，1表示使用了Snappy压缩
+
+* crc 表示block data和type的CRC校验值
+
+当存储一个Key时LevelDB采用了**前缀压缩(prefix-compressed)**，由于LevelDB中Key是按序排列的，这可以显著的减少空间占用。另外，每间隔k个keys(目前版本中k的默认值为16)，leveldb就取消使用前缀压缩，而是存储整个key(我们把存储整个key的点叫做重启点)。这样的好处是提高在block中检索key的速度。在block中随机检索一个key时，可以先对重启点进行二分查找，缩小查找范围，然后再遍历查找。如果没有重启点，在block中查找某个key的时候只能顺序遍历，因为如果要知道第i+1条记录需要知道第i条记录的key，如果要恢复第i条记录需要知道第i-1条记录的key，一直这样递归下去，才能知道key值。
+另外，从数据结构上看，leveldb还使用了varint类型来进一步对数据进行压缩，varint编码可以将一个4字节的int32值最短可以编码成1个字节表示，最长编码成5个字节，对于小整数来说，压缩效果很明显。
+PS 要了解前缀压缩、Varint编码、CRC校验等基本知识可以参照phylips的<LevelDB SSTable>格式详解
+
+每个这样的指针被称为一个BlockHandle，包含如下信息：
 offset: varint64
 size: varint64
 如图所示，Footer中会有一个meta index handle用来指向Meta index block，还有一个dtaa index handle 用来指向Data Index Block， 然后这两个Index Block，实际上是一系列Data Blocks和Meta Blocks的索引，其内部的KeyValue值就包含了指向文件中的一系列Meta Block和Data Block的handle。
