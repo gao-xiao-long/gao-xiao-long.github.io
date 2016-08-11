@@ -42,7 +42,7 @@ Data Block是基于block_builder.cc生成的。存储了有序的key-value对，
 判断逻辑为(estimated_block_size >= options.block_size) 可能会出现Add完一个后block超出block_size的情况。
 
 当存储一个时LevelDb采用了前缀压缩(prefix-compressed)，由于LevelDb中key是按序排列的，这可以显著的减少空间占用。另外，每间隔k个keys(目前版本中k的默认值为16)，LevelDb就取消使用前缀压缩，而是存储整个key(我们把存储整个key的点叫做重启点)。这样的好处是提高在block中检索key的速度。在block中随机检索一个key时，可以先对重启点进行二分查找，缩小查找范围，然后再遍历查找。如果没有重启点，在block中查找某个key的时候只能顺序遍历，因为如果要知道第i+1条记录需要知道第i条记录的key，如果要恢复第i条记录需要知道第i-1条记录的key，一直这样递归下去，才能知道key值。
-另外，从数据结构上看，LevelDb还使用了varint类型来进一步对数据进行压缩，varint对整数类型进行边长编码，比如可以将一个4字节的int32值最短可以编码成1个字节表示，最长编码成5个字节，对于小整数来说，压缩效果很明显。(要了解前缀压缩、varint编码、CRC校验等基本知识可以参照phylips的"LevelDb SSTable格式详解")
+另外，从数据结构上看，LevelDb还使用了varint类型来进一步对数据进行压缩，varint对整数类型进行变长编码，比如可以将一个4字节的int32值最短可以编码成1个字节表示，最长编码成5个字节，对于小整数来说，压缩效果很明显。(要了解前缀压缩、varint编码、CRC校验等基本知识可以参照phylips的"LevelDb SSTable格式详解")
 
 **block size大小对性能的影响:**
 
