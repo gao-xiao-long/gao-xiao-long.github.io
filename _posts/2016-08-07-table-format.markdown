@@ -11,7 +11,7 @@ tags:
 
 SSTable为Sorted String Table的简称，用来存储一系列有序Kev-Value对。LevelDb中不同层级下有多个SSTable文件(.sst)，下面介绍单个SSTable文件的静态结构。
 
-![结构图](/img/in-post/LevelDb/sstable.png)
+![结构图](/img/in-post/leveldb/sstable.png)
 
 单个SSTable文件的格式如上图所示，文件由五大部分组成：Data Blocks, Meta Block, Meta Index Block, Data Index Block, Footer。
 
@@ -27,7 +27,7 @@ SSTable为Sorted String Table的简称，用来存储一系列有序Kev-Value对
 
 Data Block是基于block_builder.cc生成的。存储了有序的Key-Value对，内部的基本结构如下:
 
-![结构图](/img/in-post/LevelDb/data_block.png)
+![结构图](/img/in-post/leveldb/data_block.png)
 
 其中
 
@@ -50,7 +50,7 @@ LevelDb 以block为单位进行磁盘读写操作，默认的block大小在压�
 Meta Block用来存储一些元信息。目前的版本中仅存储了filter信息。如果打开数据库时指定了"FilterPolicy", 那么每个Table中都会存储一个filter block。LevelDb中默认的FilterPolicy为bloom filter。在查找某个时(DB::Get())，可以先通过FilterPolicy来判断key是否在某个SSTable中，如果不存在，则直接跳过此SSTable，避免对此SSTable进行更进一步的磁盘访问操作。
 table的filter block中存储了一系列的filters。每个filter又是由一系列的生成的，第i个filter由在sstable中文件偏移为[i*base...(i+1)*base]的所有key生成的,base默认为2KB。生成filter的操作在table_builder.cc中，由TableBuilder::Flush()函数调用。当某个block超过了options.block_size时，调用TableBuilder::Flush()将此block刷新到磁盘，并调用FilterBlock::StartBlock(block_offset)函数，StartBlock函数根据此block在文件中的offset来判断是否创建新的filter。由此可见，一个filter可能会对应多个block，一个block肯定不会跨越两个filter。访问时先从data index block中得到data block在文件中的offset，然后通过offset计算出该block在哪个filter，之后就可以直接读取该filter数据。block filter文件组织格式如下:
 
-![结构图](/img/in-post/LevelDb/filter_block.png)
+![结构图](/img/in-post/leveldb/filter_block.png)
 
 (PS: lg(base)存储的是对2取对数的值，如果base=2KB，那么lg(base) = lg(2*1024) = 11)
 
