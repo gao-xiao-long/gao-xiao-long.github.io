@@ -46,7 +46,7 @@ Data Block是基于block_builder.cc生成的。存储了有序的key-value对，
 
 **block size大小对性能的影响:**
 
-LevelDb 以block为单位进行磁盘读写操作，默认的block大小在压缩前在4096个字节左右，需要结合使用场景来调整block size的大小，如果是顺序访问可以将此block size设置大些，如果是随机访问的话可以将block size设置的小一些(索引粒度变细，加快查找速度)。如果单个key-value的值比较大也可以将block size设置的大一些。但是将block设置为1KB以下或者几兆大小不会带来明显的好处。还需要说明的是将block size设置太小有可能导致创建SSTable文件时变慢(原因是以block为单位压缩及Flush)。
+LevelDb 以block为单位进行磁盘读写操作，默认的block大小在压缩前在4096个字节左右，需要结合使用场景来调整block size的大小，如果是顺序访问或者单个key-value的值比较大可以将block size设置大些，如果是随机访问的话可以将block size设置的小一些(索引粒度变细，加快查找速度),将block size设置太小有可能导致创建SSTable文件时变慢(原因是以block为单位压缩及Flush)。并且将block设置为1KB以下或者几兆大小不会带来明显的好处。
 
 ## Meta Block
 Meta Block用来存储一些元信息。目前的版本中仅存储了filter信息。如果打开数据库时指定了"FilterPolicy", 那么每个Table中都会存储一个filter block。LevelDb中默认的FilterPolicy为bloom filter。在查找某个时(DB::Get())，可以先通过FilterPolicy来判断key是否在某个SSTable中，如果不存在，则直接跳过此SSTable，避免对此SSTable进行更进一步的磁盘访问操作。
