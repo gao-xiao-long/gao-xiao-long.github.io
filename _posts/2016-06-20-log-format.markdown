@@ -1,6 +1,6 @@
 ---
 layout: post
-title: leveldb1.18源码剖析--log format
+title: leveldb1.2源码剖析--log format
 date: 2016-6-20
 author: "gao-xiao-long"
 catalog: false
