@@ -1,6 +1,6 @@
 ---
 layout: post
-title: leveldb1.2源码剖析--memtable
+title: leveldb1.2源码剖析--Memtable
 date: 2016-9-24
 author: "gao-xiao-long"
 catalog: false
