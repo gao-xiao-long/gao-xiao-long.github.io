@@ -1,6 +1,6 @@
 ---
 layout: post
-title: LevelDb1.2源码剖析--SSTable格式详解
+title: LevelDb1.2源码剖析--SSTable
 date: 2016-8-7
 author: "gao-xiao-long"
 catalog: true
