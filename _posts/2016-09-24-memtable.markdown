@@ -10,9 +10,9 @@ tags:
 ---
 
 Memtable是leveldb中基于内存的数据结构。当应用写入(Put)一条记录的时候，应用会先将此记录追加到Log文件中，之后再插入Memtable。
-得益于每次写入操作只会顺序写一次磁盘及写一次内存，LevelDB的插入速度非常快。当Memtable占用的内存达到指定阈值后，LevelDB会生成新的Log文件及Memtable文件，并将原来的
+得益于每次写入操作只会顺序写一次磁盘及写一次内存，LevelDB的写性能很高。当Memtable占用的内存达到指定阈值后，LevelDB会生成新的Log文件及Memtable文件，并将原来的
 Memtable转化为Immutable Memtable(只读),待后续合并到SSTable文件中。
-Memtable支持对数据的插入和删除和查找操作，需要说明的是，当删除某个Key时，Memtable并不会真正的删除，而是会把待删除的Key上打一个删除标记，然后对此Key执行插入操作。真正的删真正的删除操作是在后面Compaction过程中进行的。另外，Memtable中的的数据是按照Key大小有序排列的，底层支持这种按需排列的数据结构为SkipList。它是平衡数的一种替代数据结构，可以高效的进行插入和查找操作。下面来看下Memtable的具体接口及实现(memtable.{h,cc}中)。
+Memtable支持对数据的插入和删除和查找操作，需要说明的是，当删除某个Key时，Memtable并不会真正的删除，而是会把待删除的Key上打一个删除标记，然后对此Key执行插入操作。真正的删真正的删除操作是在后面Compaction过程中进行的。另外，Memtable中的的数据是按照Key大小有序排列的，底层支持这种按序排列的数据结构为SkipList。它是平衡数的一种替代数据结构，可以高效的进行插入和查找操作。下面来看下Memtable的具体接口及实现(memtable.{h,cc}中)。
 
 ![memtable-interface](/img/in-post/leveldb/memtable-interface.png)
 
@@ -82,7 +82,7 @@ Add逻辑中涉及到两个基本组件Arena，及SkipList。Arena的主要作�
 ![memtable-add](/img/in-post/leveldb/memtable-get.png)
 Get()逻辑比较简单，首先就是通过SkipList的迭代器找到"大于等于要查找Key的第一个entry",然后再比较找到的entry是否与要查找的Key相同，最后返回true or false
 
-至此Memtable相关代码分析完毕(每次读leveldb代码都是一种享受)
+至此Memtable相关代码分析完毕。
 
 
 
