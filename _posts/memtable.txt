@@ -1,0 +1,93 @@
+---
+layout: post
+title: leveldb1.2源码剖析--memtable
+date: 2016-9-24
+author: "gao-xiao-long"
+catalog: false
+tags:
+    - leveldb
+    - memtable
+---
+
+Memtable是leveldb中基于内存的数据结构。当应用写入(Put)一条记录的时候，应用会先将此记录追加到Log文件中，之后再插入Memtable。
+得益于每次写入操作只会顺序写一次磁盘及写一次内存，LevelDB的插入速度非常快。当Memtable占用的内存达到指定阈值后，LevelDB会生成新的Log文件及Memtable文件，并将原来的
+Memtable转化为Immutable Memtable(只读),待后续合并到SSTable文件中。
+Memtable支持对数据的插入和删除和查找操作，需要说明的是，当删除某个Key时，Memtable并不会真正的删除，而是会把待删除的Key上打一个删除标记，然后对此Key执行插入操作。真正的删真正的删除操作是在后面Compaction过程中进行的。另外，Memtable中的的数据是按照Key大小有序排列的，底层支持这种按需排列的数据结构为SkipList。它是平衡数的一种替代数据结构，可以高效的进行插入和查找操作。下面来看下Memtable的具体接口及实现(memtable.{h,cc}中)。
+
+![memtable-interface](/img/in-post/leveldb/memtable-interface.png)
+
+如上图所示，Memtable对外提供了NewIterator()、Add()、Get()接口，NewIterator()用于创建一个MemTable的迭代器，可以对MemTable进行顺序遍历。Add()及Get()用于增加和查找。
+在讲Add()和Get()等具体实现前，先看下里面涉及到的主要的数据结构(dbformat.{h,cc}中)
+
+**SequenceNumber:**
+
+leveldb每次更新数据操作都存在一个版本，即SequenceNumber，具有全局唯一性,由0开始递增。定义如下:
+
+```C++
+typedef uint64_t SequenceNumber;
+
+// We leave eight bits empty at the bottom so a type and sequence#
+// can be packed together into 64-bits.
+static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
+
+```
+
+从定义上可以看出实际上SequenceNumber只占用56个字节，剩余的8个字节与ValueType一起打包成64字节(后面会附图解释)。
+
+
+**ValueType**
+
+ValueType的定义如下
+
+```C++
+
+// Value types encoded as the last component of internal keys.
+// DO NOT CHANGE THESE ENUM VALUES: they are embedded in the on-disk
+// data structures.
+enum ValueType {
+  kTypeDeletion = 0x0,
+  kTypeValue = 0x1
+};
+
+```
+
+前面讲过，leveldb的删除操作为lazy
+delete，会将待删除的Key打上删除标记，然后插入到Memtable中。这里的删除标记即：ValueType=kTypeDeletion。ValueType的左右就是为了区分是添加某个Key还是删除某个Key
+
+**InternalKey、LookupKey等各种Key**
+
+* user_key: 即我们实际上要插入或查找的key。
+* internal_key: 实际上插入memtable的key结构。由 user_key + sequence_number + value_type 组成,其中sequence_number和value_type组合在一起1️⃣uint64位表示。
+* lookup_key: 由sizeof(user_key + 8) + internal_key组成。其中interl_key中的value_type为固定值"kValueType"
+
+各种key的关系如下：
+
+![memtable-keys](/img/in-post/leveldb/memtable-keys.png)
+
+注: key_tag由SequenceNum及ValueType组成。它们两个封装在一个uint64中，以节省内存空间。
+
+
+下面分析下Add()实现逻辑:
+
+![memtable-add](/img/in-post/leveldb/memtable-add.png)
+
+Add逻辑中涉及到两个基本组件Arena，及SkipList。Arena的主要作用是为待插入到Memtable的Key分配动态空间(关于Arena的实现原理可以参照[这篇文章](http://gao-xiao-long.github.io/2016/05/05/leveldb-arena/))动态分配空间，SkipList为KeyValue的后台存储结构。SkipList的定义为: typedef SkipList<const char*, KeyComparator> Table; Add()逻辑会先把待插入的KeyValue封装成如下entry：
+
+![memtable-keys](/img/in-post/leveldb/memtable-add-entry.png)
+
+然后插入到SkipList中。Key在SkipList中的排序规则由InternalKeyComparator实现，排序逻辑为: 如果UserKey不同则按照Key的升序排列，如果UserKey相同按照SequenceNumber的降序排列。
+这样可以保证在查找某个Key时最新修改的Key优先被查到。
+
+再来看下Get()逻辑:
+![memtable-add](/img/in-post/leveldb/memtable-get.png)
+Get()逻辑比较简单，首先就是通过SkipList的迭代器找到"大于等于要查找Key的第一个entry",然后再比较找到的entry是否与要查找的Key相同，最后返回true or false
+
+至此Memtable相关代码分析完毕(每次读leveldb代码都是一种享受)
+
+
+
+
+
+
+
+
