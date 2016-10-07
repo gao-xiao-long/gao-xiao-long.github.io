@@ -95,7 +95,7 @@ class WriteBatch {
 当调用Write()函数将WriteBatch中的一系列操作写入数据库时，会先将数据以上述的格式写入Log中，以便数据恢复。
 下面看下Write函数逻辑：
 
-```C++
+```c
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   Writer w(&mutex_);
   w.batch = my_batch;
