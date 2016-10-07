@@ -15,12 +15,12 @@ LevelDB支持单条写以及批量写的操作,用法分别如下:
 
 一次插入单条记录
 
-```c
+```c++
 db->Put(leveldb::WriteOptions(), key2, value);
 ```
 WriteBatch形式插入多条记录
 
-```c
+```c++
 leveldb::WriteBatch batch;
 batch.Delete(key1);
 batch.Put(key2, value);
@@ -29,7 +29,7 @@ s = db->Write(leveldb::WriteOptions(), &batch);
 
 在底层实现上，Put操作也是通过将记录写入WriteBatch进行的。
 
-```c
+```c++
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
   WriteBatch batch;
   batch.Put(key, value);
@@ -40,7 +40,7 @@ Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
 
 WriteBatch将一系列的操作原子性的应用到数据库中，WriteBatch中的所有的更新按照他们被添加到WriteBatch中的顺序执行，比如，当下面的操作执行完成后，"key"的值将会为"v3":
 
-```c
+```c++
 batch.Put("key", "v1");
 batch.Delete("key");
 batch.Put("key", "v2");
@@ -49,7 +49,7 @@ batch.Put("key", "v3");
 
 WriteBatch的定义如下:
 
-```c
+```c++
 class WriteBatch {
  public:
   WriteBatch();
@@ -95,7 +95,7 @@ class WriteBatch {
 当调用Write()函数将WriteBatch中的一系列操作写入数据库时，会先将数据以上述的格式写入Log中，以便数据恢复。
 下面看下Write函数逻辑：
 
-```c
+```c++
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   Writer w(&mutex_);
   w.batch = my_batch;
