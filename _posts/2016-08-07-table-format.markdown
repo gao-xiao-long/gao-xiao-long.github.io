@@ -65,7 +65,7 @@ Data Block、Meta Index Block及Data Index Block都是由BlockBuilder类生成�
 
 需要说明的是，Meta Index Block 还有Data Index Block 及后面的所有的index block指向的索引都是由BlockHandle表示的，且是经过varint编码的。结构如下:
 
-```C++
+```c++
 offset: varint64
 size: varint64
 ```
@@ -74,7 +74,7 @@ size: varint64
 ## Footer
 每个SSTable文件末尾都会有一个大小固定的footer，长度为48个字节。它包含Meta Index Block 和 Index Block的BlockHandle(即offset和size)，还包含一个magic number。
 
-```C++
+```c++
     metaindex_handle: char[p];      // Block handle for metaindex
     index_handle:     char[q];      // Block handle for index
     padding:          char[40-p-q]; // zeroed bytes to make fixed length

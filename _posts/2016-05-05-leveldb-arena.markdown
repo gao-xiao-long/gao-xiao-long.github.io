@@ -16,7 +16,7 @@ leveldb util目录中提供了通用功能的实现，比如内存管理(arena),
 
 arena是leveldb中实现的一个简单的内存管理器, 对外部暴露如下三个接口:
 
-```C++
+```c++
 char* Allocate(size_t bytes); // 分配指定大小内存
 char* AllocateAligned(size_t bytes); // 分配指定大小内存并保证内存对齐
 size_t MemoryUsage() const; // arena所占用内存的大小
@@ -26,7 +26,7 @@ size_t MemoryUsage() const; // arena所占用内存的大小
 内部的数据结构也比较简单
 
 
-```C++
+```c++
 std::vector<char*> blocks_; // 系统分配的内存数组
 char* alloc_ptr_;           // 指向空闲块起始位置指针
 size_t alloc_bytes_remaining_; // 空闲块剩余大小

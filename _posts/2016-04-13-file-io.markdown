@@ -81,7 +81,7 @@ Dirty:888KB表示当前有888KB的数据缓存在page cache，在等待后台线
 
 Linx下主要有fsync()和fdatasync()及sync()三个同步I/O命令
 
-```C++
+```c++
 #include <unistd.h>
 int fsync(int fd);
 int fdatasync(int fd);

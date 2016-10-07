@@ -23,7 +23,7 @@ Memtable支持对数据的插入和删除和查找操作，需要说明的是，
 
 leveldb每次更新数据操作都存在一个版本，即SequenceNumber，具有全局唯一性,由0开始递增。定义如下:
 
-```C++
+```c++
 typedef uint64_t SequenceNumber;
 
 // We leave eight bits empty at the bottom so a type and sequence#
@@ -39,7 +39,7 @@ static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 
 ValueType的定义如下
 
-```C++
+```c++
 
 // Value types encoded as the last component of internal keys.
 // DO NOT CHANGE THESE ENUM VALUES: they are embedded in the on-disk

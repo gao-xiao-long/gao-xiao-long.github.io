@@ -11,7 +11,7 @@ tags:
 
 leveldb默认使用LRU(least recently used)缓存策略。构造LRU cache的基本数据结构主要有
 
-```C++
+```c++
 LRUHandle    // 底层数据结构，被索引的实体信息，包含key、value、引用次数等
 HandleTable  // 底层数据结构，索引LRUHandle的哈希表
 LRUCache     // 以LRUHandle及HandleTable为基础的LRU cache具体实现
@@ -22,7 +22,7 @@ ShardedLRUCache // 管理多个LRUCache的类(适用于多线程访问场景，�
 
 数据结构如下
 
-```C++
+```c++
 struct LRUHandle {
   void* value;  // key-value结构中的value值
   void (*deleter)(const Slice&, void* value); // 实体被销毁前调用的函数, 由外部传入
@@ -69,7 +69,7 @@ leveldb实现了一个简单的hashtable。原因有两个: 1. 与平台无关�
 内部实现逻辑比较简单，维护了一个LRUHandle的链表，并采用拉链法来解决hash冲突。
 主要变量为:
 
-```C++
+```c++
 uint32_t length_;   // hash链表长度
 uint32_t elems_;    // hash链表中当前元素个数
 LRUHandle** list_;  // hash链表指针
@@ -78,7 +78,7 @@ LRUHandle** list_;  // hash链表指针
 
 主要接口为:
 
-```C++
+```c++
 LRUHandle* Lookup(const Slice& key, uint32_t hash) // 查找key,返回节点指针
 LRUHandle* Insert(LRUHandle* h)                    // 插入key, 如果key存在,返回NULL，否则返回key对应的
                                                    // 旧的LRUHandle指针(后续可以将其释放)
@@ -89,7 +89,7 @@ LRUHandle** FindPointer(const Slice& key, uint32_t hash) // 内部接口，返�
 leveldb在FindPointer中使用了一个小技巧,在length_为2的倍数时，可以通过 hash & (length_ -1) 来找到对应的的list_位置。
 这比使用 hash%length_ 运算起来更快。
 
-```C++
+```c++
 LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
     while (*ptr != NULL &&
@@ -106,7 +106,7 @@ HandleTable的结构如下:
 
 LRUCache主要成员函数如下:
 
-```C++
+```c++
   size_t capacity_;             // LRU Cache的总容量大小
   mutable port::Mutex mutex_;   // 用于保护下面三个变量状态
   size_t usage_;                // LRU Cache的使用量
@@ -120,7 +120,7 @@ lru_某一状态下结构图如下:
 其中lru_为傀儡节点，本身不存储数据。的next指针指向最旧的Handle。prev指针指向最近被访问过的Handle。每当插入(LRUAppend)一个新的Handle时，都会插入到双向链表
 的末尾，且改变lru_的prev指针指向最新插入的Handle。具体的Append和Remove操作如下:
 
-```C++
+```c++
 //添加节点到lru_双向链表中
 void LRUCache::LRU_Append(LRUHandle* e) {
   // Make "e" newest entry by inserting just before lru_
@@ -141,7 +141,7 @@ void LRUCache::LRU_Remove(LRUHandle* e) {
 
 LRUCache对外主要提供以下接口
 
-```C++
+```c++
  // 插入key到Cache中，并返回内部生成的Handle
  Cache::Handle* Insert(const Slice& key, uint32_t hash,
                         void* value, size_t charge,
@@ -190,7 +190,7 @@ LRUCache对外主要提供以下接口
 ShardedLRUCache将16个LRUCache对象放到一起(shard)，然后根据key的前四个字节(最多可以代表16)选择不同shard。
 关键的数据结构和函数如下:
 
-```C++
+```c++
 static const int kNumShardBits = 4;
 static const int kNumShards = 1 << kNumShardBits;  // 位操作技巧
 class ShardedLRUCache : public Cache {

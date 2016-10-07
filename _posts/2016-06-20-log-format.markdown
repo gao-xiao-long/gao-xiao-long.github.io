@@ -16,7 +16,7 @@ LevelDB中日志文件(*.log)存储了对DB的更新操作，log文件的主要�
 log文件由一系列的block组成，每个block大小为32KB。每个block包含一个或者多个记录(record)。
 记录的格式为:
 
-```C++
+```c++
     checksum: uint32           // type及data[]对应的crc32值
     length:   uint16           // 数据长度
     type:     uint8            // FULL/FIRST/MIDDLE/LAST中的一种
@@ -33,7 +33,7 @@ log文件由一系列的block组成，每个block大小为32KB。每个block包�
 
 假设有如下一系列的用户记录:
 
-```C++
+```c++
 A: length 1000
 B: length 97270
 C: length 8000
