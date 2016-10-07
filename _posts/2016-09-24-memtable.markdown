@@ -24,6 +24,7 @@ Memtable支持对数据的插入和删除和查找操作，需要说明的是，
 leveldb每次更新数据操作都存在一个版本，即SequenceNumber，具有全局唯一性,由0开始递增。定义如下:
 
 ```c++
+
 typedef uint64_t SequenceNumber;
 
 // We leave eight bits empty at the bottom so a type and sequence#
