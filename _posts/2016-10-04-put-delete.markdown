@@ -88,7 +88,7 @@ class WriteBatch {
 
 **说明：**
 
-1. sequence_number: 版本号，sequence_number=(全局最新版本号+1)，在调用Write时填充( WriteBatchInternal::SetSequence(updates, last_sequence + 1);),用于为WriteBatch中的所有操作生成一个版本号。WriteBatch里的每一次Put或者Delete操作的版本号都是在这个这个sequence_number基础上加1生成。当WriteBatch中的所有操作都执行完成后，全局版本号会count个( WriteBatchInternal::SetSequence(updates, last_sequence + 1);)
+1. sequence_number: 版本号，sequence_number=(全局最新版本号+1)，在调用Write时填充( WriteBatchInternal::SetSequence(updates, last_sequence + 1);),用于为WriteBatch中的所有操作生成一个版本号。WriteBatch里的每一次Put或者Delete操作的版本号都是在这个这个sequence_number基础上加1生成。当WriteBatch中的所有操作都执行完成后，全局版本号会增加count(last_sequence += WriteBatchInternal::Count(updates))
 2. count 此WriteBatch中记录的个数
 3. key_type 为kTypeDeletion 或 kTypeValue 中的一种。当key_type为kTypeDeletion时，value_length及value_data为空。
 
