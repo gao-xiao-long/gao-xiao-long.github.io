@@ -1,6 +1,6 @@
 ---
 layout: post
-title: 理解文件I/O
+title: leveldb前奏--理解文件I/O
 date: 2016-4-13
 author: "gao-xiao-long"
 catalog: false
