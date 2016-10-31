@@ -5,8 +5,7 @@ date: 2016-4-13
 author: "gao-xiao-long"
 catalog: false
 tags:
-    - IO
-    - 性能优化
+    - 基本技术
 ---
 
 本文分topic讲解Linux环境下文件I/O中涉及到的知识点，温故知新，更深刻的了解文件I/O

@@ -6,7 +6,6 @@ author: "gao-xiao-long"
 catalog: false
 tags:
     - leveldb
-    - memtable
 ---
 
 Memtable是LevelDB中基于内存的数据结构。当应用写入(Put)一条记录的时候，应用会先将此记录追加到Log文件中，之后再插入Memtable。
@@ -59,7 +58,7 @@ delete，会将待删除的Key打上删除标记，然后插入到Memtable中。
 
 * user_key: 即我们实际上要插入或查找的key。
 * internal_key: 实际上插入到memtable的key结构。由 user_key + sequence_number + value_type 组成，其中sequence_number和value_type组合在一起用uint64表示。
-* lookup_key: 由sizeof(user_key + 8) + internal_key组成。其中interl_key中的value_type为固定值"kValueType"
+* lookup_key: 由sizeof(user_key + 8) + internal_key组成。其中internal_key中的value_type为固定值"kValueType"
 
 各种key的关系如下：
 

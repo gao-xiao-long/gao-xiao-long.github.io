@@ -6,7 +6,6 @@ author: "gao-xiao-long"
 catalog: true
 tags:
     - leveldb
-    - cache
 ---
 
 leveldb默认使用LRU(least recently used)缓存策略。构造LRU cache的基本数据结构主要有

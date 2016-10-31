@@ -6,7 +6,6 @@ author: "gao-xiao-long"
 catalog: false
 tags:
     - leveldb
-    - put
 ---
 
 LevelDB插入一条记录时，采用WAL(write ahead logging)方式，先顺序写到磁盘日志中，然后写入Memtable。这种方式可以保证程序异常结束后数据不丢失，并且由于采用了顺序写+内存写的方式，写性能很高。
