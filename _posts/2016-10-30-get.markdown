@@ -14,11 +14,13 @@ tags:
 
 那为什么对于SSTable文件来说，Level L的信息一定比Level L+1的信息要新呢？原因很简单，Level L+1的数据是从Level L中经过Compaction得到的(后面有时间会单独再讲下Compaction具体逻辑)，也就是说Level L+1层的数据是从Level L中来的，而现在的Level L比原来的Level L数据要新鲜，所以现在的Level L比现在的Level L+1的数据要新鲜。
 
-对于在Memtable和Immutable Memtable中的查找逻辑不再展开，感兴趣的可以看下[leveldb1.2源码剖析--Memtable](http://gao-xiao-long.github.io/2016/09/24/memtable/)下面重点分析下从磁盘文件SSTable中查找Key的过程。
+对于在Memtable和Immutable Memtable中的查找逻辑不再展开，感兴趣的可以看下[leveldb1.2源码剖析--Memtable](http://gao-xiao-long.github.io/2016/09/24/memtable/), 下面重点分析下从磁盘文件SSTable中查找Key的过程。
 
 在磁盘文件中查找某个Key可以拆分为两个步骤：
+
 1. 找到可能包含要查找的Key的SSTable文件。
 2. 从SSTable文件中查找Key是否存在, 如果存在，则读取。
+
 
 那么第一个问题来了，LevelDB是如何判断某个SSTable文件中是否可能包含某个Key呢？这就涉及到Version的概念，现在不对Version做详细介绍，后面有时间会单独写一篇关于LevelDB版本控制的文章。 这里只需要知道Version保存了某个时刻磁盘以及内存中所有的文件信息(最新版本的Version被称为"current" Version)。 文件信息用数据结构FileMetaData表示, 如下：
 
