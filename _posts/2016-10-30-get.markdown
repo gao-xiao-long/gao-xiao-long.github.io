@@ -1,0 +1,89 @@
+---
+layout: post
+title: leveldb1.2源码剖析--读取记录(Gut)
+date: 2016-10-04
+author: "gao-xiao-long"
+catalog: false
+tags:
+    - leveldb
+---
+
+相对于Put操作，LevelDB在读取Key时比较复杂，会先在Memtable中查找，如果Memtable中包含要查找的Key，直接返回，否则到Immutable Memtable中读取，如果还是没有找到的话则会在磁盘SSTable文件中查找，在SSTable文件中查找的原则是先从Level0文件查找，没有的话再从Level1文件，直到最高的Level中查找。
+为什么会选择以上的查找路径呢？原因只有一个----获取最新的Key-Value改动。在前面分析Put操作的文章中讲过，对于删除一条记录，LevelDB也是以Put的形式附加一条删除标记插入到数据库中的，所以，相同的Key的记录可能存在多个，只有从最新的改动中查找(即Memtable --> Immutable Memtable --> SSTable)，才能够确保得到的Key的Value值是最后改动过的。
+那为什么对于SSTable文件来说，Level L的信息一定比Level L+1的信息要新呢？原因很简单，Level L+1的数据是从Level L中经过Compaction得到的(后面有时间会单独再讲下具体逻辑)，也就是说Level L+1层的数据是从Level L中来的，而现在的Level L比原来的Level L数据要新鲜，所以现在的Level L比现在的Level L+1的数据要新鲜(摘自朗格科技的博客)。
+对于在Memtable和Immutable Memtable中的查找不再展开，下面重点看下从磁盘文件SSTable中查找的过程。
+在SSTable中查找某个Key是否存在可以拆分为两个步骤： 第一步，找到可能包含要查找的Key的SSTable文件。 第二步，从SSTable文件中查找Key是否存在。那么问题来了，LevelDB是如何判断某个文件中是否可能包含某个Key呢？ 这就涉及到Version的概念，现在不打算对Version详细介绍，后面有时间会单独写一篇关于LevelDB版本控制的文章。 这里只需要知道Version保存了某个时刻磁盘以及内存中所有的文件信息(最新版本的Version被称为"current" Version)。 文件信息用数据结构FileMetaData表示, FileMetaData中保存了每个SSTable文件的最小Key和最大Key。判断要查找的Key是否在指定文件中，只需判断Key是否在文件的[smallest, largest]区间即可。
+
+```c++
+struct FileMetaData {
+  int refs;
+  int allowed_seeks;          // Seeks allowed until compaction
+  uint64_t number;
+  uint64_t file_size;         // File size in bytes
+  InternalKey smallest;       // Smallest internal key served by table
+  InternalKey largest;        // Largest internal key served by table
+
+  FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) { }
+};
+
+// List of files per level
+std::vector<FileMetaData*> files_[config::kNumLevels];
+```
+
+再找出可能包含某个带查找Key的SSTable文件时，由于Level0中的SSTable都是由Immutable Memtable Dump到磁盘上形成的，所以比较特殊, 可能会存在Key的重叠，即一个Key可能出现在多个Level0文件中。所以再查找Level0的文件时，需要先找出Level0中包含要查找的Key的所有SSTable文件，然后按照文件的新鲜程度排序，新的文件排在前面，对这些SSTable文件依次查找。对于非Level0的SSTable文件，不存在Key的重叠现象，直接通过二分查找找到可能包含要查找的Key的文件即可。
+
+现在可能存在某个Key的SSTable文件已经找到了，第二步就是判断Key是否真的在指定的SSTable文件中(关于SSTable的组织格式在[leveldb1.2源码剖析--SSTable](http://gao-xiao-long.github.io/2016/08/07/table-format/)中已经分析过，感兴趣的可以了解下)。默认情况下，在SSTable中查找某个Key需要2次读磁盘操作，一次是将SSTable文件的Index部分读入内存，根据Index的信息确定Key在哪个Block中，第二次读入这个Block内容，在内存中查找Key对应的Value信息(没有考虑Bloom Filter)。这样效率是非常低下的，所以LevelDB引入了Cache来解决这个问题。
+LevelDB中存在Table Cache和Block Cache两种不同的Cache。 模式实现方式都是LRU(见(leveldb1.2源码剖析--通用模块(Cache))[http://gao-xiao-long.github.io/2016/05/13/leveldb-cache/]) 其中Table Cache用来缓存打开的SSTable中的Index和Meta(Filter)信息，可以缓存的SSTable数量由options.max_open_files决定，默认为1000，最大不超过50000（RocksDB中可以设置为-1，表示不限制缓存的SSTable数量）。在DB初始化时指定。
+
+```c++
+DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
+    : env_(raw_options.env),
+      internal_comparator_(raw_options.comparator),
+      internal_filter_policy_(raw_options.filter_policy),
+      options_(SanitizeOptions(dbname, &internal_comparator_,
+                               &internal_filter_policy_, raw_options)),
+      owns_info_log_(options_.info_log != raw_options.info_log),
+      owns_cache_(options_.block_cache != raw_options.block_cache),
+      dbname_(dbname),
+      db_lock_(NULL),
+      shutting_down_(NULL),
+      bg_cv_(&mutex_),
+      mem_(NULL),
+      imm_(NULL),
+      logfile_(NULL),
+      logfile_number_(0),
+      log_(NULL),
+      seed_(0),
+      tmp_batch_(new WriteBatch),
+      bg_compaction_scheduled_(false),
+      manual_compaction_(NULL) {
+  has_imm_.Release_Store(NULL);
+
+  // Reserve ten files or so for other uses and give the rest to TableCache.
+  const int table_cache_size = options_.max_open_files - kNumNonTableCacheFiles;
+  table_cache_ = new TableCache(dbname_, &options_, table_cache_size);
+
+  versions_ = new VersionSet(dbname_, &options_, table_cache_,
+                             &internal_comparator_);
+}
+
+```
+
+Table Cache中的Key为SSTable文件编号，Value为TableAndFile组成的结构体。其中file指向打开的SSTable文件，table为
+SSTable文件对应Table结构指针。
+
+```c++
+struct TableAndFile {
+  RandomAccessFile* file;
+  Table* table;
+};
+```
+
+查找某个Key是否在SSTable时，会先通过TableCache读取SSTable的Index和Filter信息(TableCache中不存在的话则加载到TableCache)。
+然后通过Index判断Key可能处于哪个Block中，(如果指定了options.filter的话再通过Filter判断Key是否真的在Block中)，接下就是读取指定Block的内容。
+这就涉及到了Block Cache， 可以通过Block Cache加快对Block的读取。Block Cache中的Key = (SSTable文件的cache_id + 此Block在文件中的其实位置block_offset) Value则是
+这个Block的内容)
+Block Cache由options.block_cache指定，默认为8MB。如果制定了block_cache,则LevelDB会先从Cache中读取这个Block，如果Cache中没有找到，再从磁盘中读取Block内容并插入到Block Cache中。
+可以看出，如果读取的数据局部性不较好的话，即要读取的大部数据在Cache中都能找到，那么读取效率会很高，如果是随机读取，则性能会.....
+
+
