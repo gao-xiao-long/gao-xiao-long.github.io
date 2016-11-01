@@ -37,14 +37,15 @@ struct FileMetaData {
 };
 
 // List of files per level
+// 每个level由一系列FileMetaData组成
 std::vector<FileMetaData*> files_[config::kNumLevels];
 ```
 可以看到，FileMetaData中保存了每个SSTable文件的最小Key(smallest)和最大Key(largest)。判断要查找的Key是否在指定文件中，只需判断Key是否在文件的[smallest, largest]区间即可。
-需要说明的是，由于Level0中的SSTable都是由Immutable Memtable Dump到磁盘上形成的，所以比较特殊, 可能会存在Key的重叠，即一个Key可能出现在多个Level0文件中。所以再查找Level0的文件时，需要先找出Level0中可能包含要查找的Key的所有SSTable文件，然后按照文件的新鲜程度排序，新的文件排在前面，然后对这些SSTable文件依次查找(**所以如果Level0文件过多的话有可能会导致查找性能变差**)。对于非Level0的SSTable文件，不存在Key的重叠现象，直接通过二分查找找到可能包含要查找的Key的一个文件即可。
+需要说明的是，由于Level0中的SSTable都是由Immutable Memtable Dump到磁盘上形成的，所以比较特殊，可能会存在Key的重叠，即一个Key可能出现在多个Level0文件中。所以在查找Level0的文件时，需要先找出Level0中可能包含要查找的Key的所有SSTable文件，然后按照文件的新鲜程度排序，新的文件排在前面，然后对这些SSTable文件依次查找(**所以如果Level0文件过多的话有可能会导致查找性能变差**)。对于非Level0的SSTable文件，不存在Key的重叠现象，直接通过二分查找找到可能包含要查找的Key的一个文件即可。
 
-现在可能存在要查找Key的SSTable文件已经找到了，第二步就是判断Key是否真的在指定的SSTable文件中(关于SSTable的组织格式在[leveldb1.2源码剖析--SSTable](http://gao-xiao-long.github.io/2016/08/07/table-format/)中已经分析过，感兴趣的可以了解下)。默认情况下(不指定Bloom Filter)，在SSTable中查找某个Key需要2次读磁盘操作，一次是将SSTable文件的Index部分读入内存，根据Index的信息定位Key可能存在于哪个Block中，第二次读入这个Block内容，并查找Key对应的Value信息。这样效率是非常低下的，所以LevelDB引入了Cache来解决这个问题。
+候选的SSTable文件已经找到了，第二步就是判断Key是否真的在指定的SSTable文件中(关于SSTable的组织格式在[leveldb1.2源码剖析--SSTable](http://gao-xiao-long.github.io/2016/08/07/table-format/)中已经分析过，感兴趣的可以了解下)。默认情况下(不指定Bloom Filter)，在SSTable中查找某个Key需要2次读磁盘操作，一次是将SSTable文件的Index部分读入内存，根据Index的信息定位Key可能存在于哪个Block中，第二次读入这个Block内容，并查找Key对应的Value信息。这样效率是非常低下的，所以LevelDB引入了Cache来解决这个问题。
 
-LevelDB中引入了Table Cache和Block Cache两种不同的Cache。 Cache默认实现方式都是LRU(见(leveldb1.2源码剖析--通用模块(Cache))[http://gao-xiao-long.github.io/2016/05/13/leveldb-cache/]) 其中Table Cache用来缓存打开的SSTable对应的Index和Meta(Filter)信息，可以缓存的SSTable数量由options.max_open_files决定，默认为1000，最大不超过50000（RocksDB中可以设置为-1，表示不限制缓存的SSTable数量）。在DB初始化时指定。
+LevelDB中引入了Table Cache和Block Cache两种不同的Cache。 Cache默认实现方式都是LRU(见[leveldb1.2源码剖析--通用模块(Cache)](http://gao-xiao-long.github.io/2016/05/13/leveldb-cache/) 其中Table Cache用来缓存打开的SSTable对应的Index和Meta(Filter)信息，可以缓存的SSTable数量由options.max_open_files决定，默认为1000，最大不超过50000（RocksDB中可以设置为-1，表示不限制缓存的SSTable数量）。在DB初始化时指定。
 
 ```c++
 DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
