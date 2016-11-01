@@ -96,6 +96,7 @@ struct TableAndFile {
 查找某个Key是否在SSTable时，会先通过TableCache读取SSTable的Index和Filter信息(TableCache中不存在的话则从磁盘读取并加载到TableCache)。
 然后通过Index信息判断Key可能处于哪个Block中，(如果指定了options.filter的话再通过Filter判断Key是否真的在Block中)，接下就是读取指定Block的内容。
 这就涉及到了Block Cache， LevelDB也可以通过配置options.block_cache来加快对Block的读取。Block Cache由options.block_cache指定，默认为8MB。如果制定了block_cache, 则LevelDB会先从Block Cache中读取这个Block，如果Cache中没有找到，再从磁盘中读取Block内容并插入到Block Cache中。其中Block Cache中的Key = (SSTable文件的cache_id + 此Block在文件中的其实位置block_offset) Value则是这个Block的内容。
+
 从上面的分析中可以看出，如果读取的数据局部性较好或者顺序读取数据，则要读取的大部数据在Cache中都能找到，那么读取效率会很高，如果是随机读取，则可能会涉及比较多的磁盘操作，影响读取性能。
 
 
