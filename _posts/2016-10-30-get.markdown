@@ -1,6 +1,6 @@
 ---
 layout: post
-title: leveldb1.2源码剖析--查找记录(Gut)
+title: leveldb1.2源码剖析--查找记录(Get)
 date: 2016-10-04
 author: "gao-xiao-long"
 catalog: false
