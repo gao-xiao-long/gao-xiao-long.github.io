@@ -21,6 +21,7 @@ tags:
 
 此时创建了一个迭代器
 >  v1={f1,f2,f3} (current, used by iterator1)
+
 >  files on disk: f1, f2, f3
 
 之后一个memtable数据flush成SST文件f4, 新版本被创建
