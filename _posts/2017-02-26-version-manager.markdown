@@ -45,8 +45,7 @@ files on disk: f1, f2, f3, f4
    files on disk: f1, f2, f3, f4, f5
 ```
 
-现在v2没有被任何操作引用，也不代表最新的version，可以将其删除，文件f4一并被删除，因为
-它没有被任何版本引用。v1现在还在被iterator1占用，所以不做任何处理。
+现在v2没有被任何操作引用，也不代表最新的version，可以将其删除，文件f4一并被删除，因为它没有被任何版本引用。v1现在还在被iterator1占用，所以不做任何处理。
 
 ```c++
    v3={f1,f5} (current)
@@ -102,8 +101,9 @@ struct FileMetaData {
 };
 ```
 
-结构中refs变量就是上面提到的引用计数实现。每引用一个version后，version中对应的所有文件的引用计数会加1，version过时后引用计数减1，下面是Version类析构函数代码
-verison析构后会将FileMetaData引用计数减1。当引用计数为0时，直接删除元信息数据结构。文件的物理删除则是在每次Compation之后通过DBImpl::DeleteObsoleteFiles()实现。
+结构中refs变量就是上面提到的引用计数实现。每引用一个version后，version中对应的所有文件的引用计数会加1，version过时后引用计数减1。
+
+下面是Version类析构函数代码, verison析构后会将FileMetaData引用计数减1。当引用计数为0时，直接删除元信息数据结构。文件的物理删除则是在每次Compation之后通过DBImpl::DeleteObsoleteFiles()实现。
 
 ```c++
 
@@ -275,12 +275,14 @@ LevelDB使用Builder类来高效的将base version及一系列的version edit合
   void SaveTo(Version* v)  // 将当前状态保存成版本v
 ```
 
-以上是版本管理相关的实现。还有最有一个问题，即:**内存version信息如何在LevelDB重启时还能恢复到最新的一致性状态呢?** 答案是:MANIFEST。
+以上是版本管理相关核心结构的的实现介绍。知道了各种核心结构之间的关系，还有一个问题需要搞清楚，即:内存version信息如何在LevelDB重启时还能恢复到最新的一致性状态呢?
+
+答案是:MANIFEST。
 
 #### MANIFEST: 一致性保证
 LevelDB主要是依赖MANIFEST来保持数据的一致性。先介绍几个术语:
 
-- MANIFEST: 指的是一个以事务日志(transactional log)方式跟踪LevelBD状态变化的系统。
+- MANIFEST: 指的是一个以事务日志(transactional log)方式跟踪LevelDB状态变化的系统
 - Manifest log： 指的是一个包含LevelDB状态(version edits)的单个日志文件
 - CURRENT 指的是最新的manifest log
 
@@ -293,10 +295,12 @@ MANIFEST记录是LevelDB版本信息状态变化的事务日志。它包含manif
 
 LevelDB重启时会调用VersionSet::Recover()来恢复最新的一致性状态。它的主要逻辑是从CURRENT文件中读取最近的MANIFEST，然后依次读取记录，将每条记录解码成VersionEdit实例。
 再依次调用VersionSet::Builder::Apply(&edit)。所有Version Edit读取完成之后，调用builder.SaveTo()生成新版本，并将最新版本设置为current verison，添加到VersionSet中。
-整个恢复流程借助于VersionSet::Builder，可以避免大量的临时结果产生,优化过程见下图：
+整个版本恢复流程借助于VersionSet::Builder，可以避免大量的临时结果产生,优化过程见下图：
 ![version](/img/in-post/leveldb/version_builder.png) [图片引用自catkang.github.io](http://catkang.github.io/2017/02/03/leveldb-version.html)
 
-毕。
+
+关于版本管理的介绍就到此结束，后面会分析LevelDB的Compation机制。
+
 
 #### 参考
 
