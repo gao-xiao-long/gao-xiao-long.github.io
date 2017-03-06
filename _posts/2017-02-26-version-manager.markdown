@@ -16,6 +16,7 @@ tags:
 新的Get请求或者新的迭代器在整个生命周期内将会使用**current version**。所有正在被Get或者迭代器使用的version都会被保留。不被任何Get或者迭代器使用的version将会被删除。并且如果某个SST文件也没有被任何version使用，它也将会被删除。下面举例说明：
 假设一开始一个version有三个文件：
 >   v1={f1,f2,f3} (current)
+
 >   files on disk: f1, f2, f3
 
 此时创建了一个迭代器
