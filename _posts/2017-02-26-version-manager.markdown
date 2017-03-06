@@ -8,12 +8,12 @@ tags:
     - leveldb
 ---
 
-在LevelDB中，LSM树由一系列的SST文件组成。每一次Compaction操作后，都会生成新的SST文件，合并完成之后，合并输入文件(input files)则可以丢弃。但是有可能Get或者迭代器操作还需要这些input files。所以，这些文件不能立刻删除。需要等Get操作执行完成或者迭代器释放之后才可以删除。为了管理这一系列的SST文件，LevelDB引入了版本(Version)的概念。下面来探究下具体的实现。
+在LevelDB中，LSM树由一系列的SST文件组成。每一次Compaction操作后，都会生成新的SST文件，合并完成之后，合并输入文件(input files)则可以丢弃。但是有可能get或者迭代器操作还需要这些input files。所以，这些文件不能立刻删除。需要等get操作执行完成或者迭代器释放之后才可以删除。为了管理这一系列的SST文件，LevelDB引入了版本(Version)的概念。下面来探究下具体的实现。
 
 ### 实现原理--引用计数
 
 在LevelDB中，保存LSM树的SST文件列表的数据结构被称为**version**. 在每次Compaction结束或者memtable被刷新到磁盘后，都会生成一个新的version来代表更新之后的LSM树. 其中有一个被叫做**current**的version代表当前最新的LSM树结构。
-新的Get请求或者新的迭代器在整个生命周期内将会使用**current version**。所有正在被Get或者迭代器使用的version都会被保留。不被任何Get或者迭代器使用的version将会被删除。并且如果某个SST文件也没有被任何version使用，它也将会被删除。下面举例说明：
+新的get请求或者新的迭代器在整个生命周期内将会使用**current version**。所有正在被get或者迭代器使用的version都会被保留。不被任何get或者迭代器使用的version将会被删除。并且如果某个SST文件也没有被任何version使用，它也将会被删除。下面举例说明：
 假设一开始一个version有三个文件：
 
 ```c++
@@ -25,7 +25,6 @@ files on disk: f1, f2, f3
 
 ```c++
 v1={f1,f2,f3} (current, used by iterator1)
-
 files on disk: f1, f2, f3
 ```
 
@@ -70,24 +69,25 @@ files on disk: f1, f2, f3, f4
   files on disk: f1, f5
 ```
 
-上述的逻辑使用了**引用计数**方式实现，SST文件及version都有一个引用计数。当创建一个新的version时，会
-对此version中的文件引用计数都加1。当version过时后，version中的所有文件引用计数都会减1。当一个文件
+上述的逻辑使用了**引用计数**方式实现，每个SST文件及version都有一个引用计数。
+
+当创建一个新的version时，会对此version中的文件引用计数都加1。当version过时后，version中的所有文件引用计数都会减1。当一个文件
 的引用计数降为0后，那么可以删除此文件。
 
 每个version也有一个引用计数。当一个version被创建后，引用计数为1。当次version不再是最新的version后，
-对应的引用计数减1。任何需要再某个version上进行的操作都会将version引用计数加1，操作结束后引用计数减1。
-当一个version的引用计数变为0后，则将此version删除。
-逻辑讲清楚了，看下在LevelDB中的具体代码实现。
+对应的引用计数减1。任何需要再某个version上进行的操作都会将version引用计数加1，操作结束后引用计数减1。当一个version的引用计数变为0后，则将此version删除。
+
+逻辑讲清楚了，下面看下LevelDB中的具体代码实现。
 
 ### 实现分析
 
 LevelDB涉及到版本控制的类或者结构主要有：Version、VersionSet、VersionEdit、VersionSet::Builder、FileMetaData、MANIFEST
 
-LevelDB在给定时间的某个状态被称为version(Version类表示)。对version的任何修改都被视为一次version edit(VersionEdit类表示)。一个version由一系列的version edit构成。即，version + version edit + version eidt + ... = new version。其中new version的生成由VersionSet::Builder类完成。前面讲过，由于Get操作或者迭代器的引用，系统同一时刻可能存在多个version。系统存在的version集合就用VersionSet来表示。FileMataData用于存储SST文件的元数据信息，比如文件名、被引用次数、最大最小key等。对SST文件的引用计数就是通过操作FileMataData实现。MANIFEST则是用于持久化当前系统状态，保证系统重启后数据一致性。下面看下主要类的定义。
+LevelDB在给定时间的某个状态被称为version(Version类表示)。对version的任何修改都被视为一次version edit(VersionEdit类表示)。一个version由一系列的version edit构成。即，version + version edit + version eidt + ... = new version。其中new version的生成由VersionSet::Builder类完成。前面讲过，由于get操作或者迭代器的引用，系统同一时刻可能存在多个version。系统存在的version集合就用VersionSet来表示。FileMataData用于存储SST文件的元数据信息，比如文件名、被引用次数、最大最小key等。对SST文件的引用计数就是通过操作FileMataData实现。MANIFEST则是用于持久化当前系统状态，保证系统重启后数据一致性。下面看下主要类的定义。
 
 #### FileMetaData
 
-LevelDB中庸FileMEtaData表示SST文件元信息。数据结构如下:(后面的很多version操作都会涉及此结构)
+LevelDB使用FileMEtaData表示SST文件元信息。数据结构如下:
 
 ```c++
 struct FileMetaData {
@@ -101,6 +101,34 @@ struct FileMetaData {
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) { }
 };
 ```
+
+结构中refs变量就是上面提到的引用计数实现。每引用一个version后，version中对应的所有文件的引用计数会加1，version过时后引用计数减1，下面是Version类析构函数代码
+verison析构后会将FileMetaData引用计数减1。当引用计数为0时，直接删除元信息数据结构。文件的物理删除则是在每次Compation之后通过DBImpl::DeleteObsoleteFiles()实现。
+
+```c++
+
+// 析构函数，对FileMetaData引用计数减1
+Version::~Version() {
+  assert(refs_ == 0);
+
+  // Remove from linked list
+  prev_->next_ = next_;
+  next_->prev_ = prev_;
+
+  // Drop references to files
+  for (int level = 0; level < config::kNumLevels; level++) {
+    for (size_t i = 0; i < files_[level].size(); i++) {
+      FileMetaData* f = files_[level][i];
+      assert(f->refs > 0);
+      f->refs--;
+      if (f->refs <= 0) {
+        delete f;
+      }
+    }
+  }
+}
+```
+
 
 #### Version
 
@@ -145,10 +173,10 @@ VersionEdit的主要成员变量如下:
   // Compaction相关，暂不展开
   std::vector< std::pair<int, InternalKey> > compact_pointers_;
 ```
-前面我们讲过Version和Version Edit的关系，即()
-![version](/img/in-post/leveldb/version.png) 图片引用自:[catkang.github.io](http://catkang.github.io/2017/02/03/leveldb-version.html)
+前面我们讲过Version和Version Edit的关系，即
+![version](/img/in-post/leveldb/version.png) 图片引用自:[catkang.github.io](http://catkang.github.io/2017/02/03/leveldb-version.html )
 
-后面我们会讲到，每生成一个新的version edit，都会以一条记录的形式将其序列化信息写到manifest log中, 记录格式见[log format格式](http://gao-xiao-long.github.io/2016/06/20/log-format/)，以便系统能够再重启时保持最终数据一致性,version edit的序列化代码如下(保存基本的添加、删除文件、合并点等信息)。
+后面我们会讲到，每生成一个新的version edit，都会以一条记录的形式将其序列化信息写到manifest log中, (记录格式见[log format格式](http://gao-xiao-long.github.io/2016/06/20/log-format/) )，以便系统能够再重启时保持最终数据一致性,version edit的序列化代码如下(保存基本的添加、删除文件、合并点等信息)。
 
 ```c++
 void VersionEdit::EncodeTo(std::string* dst) const {
@@ -247,7 +275,7 @@ LevelDB使用Builder类来高效的将base version及一系列的version edit合
   void SaveTo(Version* v)  // 将当前状态保存成版本v
 ```
 
-以上是版本管理相关的实现。还有最有一个问题，即:**内存version信息如何在LevelDB重启时还能恢复到最新的一致性状态呢?**
+以上是版本管理相关的实现。还有最有一个问题，即:**内存version信息如何在LevelDB重启时还能恢复到最新的一致性状态呢?** 答案是:MANIFEST。
 
 #### MANIFEST: 一致性保证
 LevelDB主要是依赖MANIFEST来保持数据的一致性。先介绍几个术语:
@@ -264,7 +292,19 @@ MANIFEST记录是LevelDB版本信息状态变化的事务日志。它包含manif
 - MANIFEST-<seq no> = (version edit1)、(version edit2)....(version editn)
 
 LevelDB重启时会调用VersionSet::Recover()来恢复最新的一致性状态。它的主要逻辑是从CURRENT文件中读取最近的MANIFEST，然后依次读取记录，将每条记录解码成VersionEdit实例。
-再依次调用VersionSet::Builder::Apply()。所有Version Edit读取完成之后，调用builder.SaveTo()生成新版本，并将最新版本设置为current verison，添加到VersionSet中。
-![version](/img/in-post/leveldb/version_builder.png) [catkang.github.io](http://catkang.github.io/2017/02/03/leveldb-version.html)
+再依次调用VersionSet::Builder::Apply(&edit)。所有Version Edit读取完成之后，调用builder.SaveTo()生成新版本，并将最新版本设置为current verison，添加到VersionSet中。
+整个恢复流程借助于VersionSet::Builder，可以避免大量的临时结果产生,优化过程见下图：
+![version](/img/in-post/leveldb/version_builder.png) [图片引用自catkang.github.io](http://catkang.github.io/2017/02/03/leveldb-version.html)
 
+毕。
+
+#### 参考
+
+[leveldb源码](https://github.com/google/leveldb)
+
+[rocksdb wiki](https://github.com/facebook/rocksdb/wiki/How-we-keep-track-of-live-SST-files )
+
+[rocksdb wiki](https://github.com/facebook/rocksdb/wiki/MANIFEST)
+
+[庖丁解LevelDB之版本控制](http://catkang.github.io/2017/02/03/leveldb-version.html)
 
