@@ -8,7 +8,7 @@ tags:
     - 基础技术
 ---
 
-本文讨论在x86_64下段错误调试的几个tips，包括段错误时存在core文件但是core调用堆栈被破坏及不存在core文件两种情况。
+本文讨论在x86_64下段错误调试的几个tips。
 
 #### 基础知识
 栈是一个动态内存区域，程序可以将数据压入栈中(入栈，push)，也可以将已经压入栈中的数据弹出(出栈，pop)。它遵循FIFO规则(First In Last Out)，即先入栈的数据后出栈。Linux操作系统中，栈是向下增长的，栈顶由称为rsp的寄存器进行定位(i386下寄存器名称为esp)。栈保存了一个函数调用所需要维护的信息，这些信息被称为堆栈帧(Stack Frame)或活动记录(Activate Record)。堆栈帧一般包括如下几方面内容：
@@ -44,9 +44,9 @@ dmesg用于输出内核信息，addr2line用于将地址转化为文件名称及
 -  ip: 指令寄存器, 存放前从主存储器读出的正在执行的一条指令。
 -  sp: 栈寄存器指。
 
-#### tip3: 通过AddressSanitizer进行检测
+#### tips3: 通过AddressSanitizer进行检测
 
-GCC4.8及以上的版本，集成了AddressSanitizer。AddressSanitizer最初由google研发，简称asan, 用于运行时检测C/C++程序中的内存错误，相比较传统工具如valgind，运行速度快，检测到错误之后，输出信息非常详细，可以通过add2line符号化输出，从而直接定位到代码行，方便快速的定位问题。官方地址是[AddressSanitizer](http://clang.llvm.org/docs/AddressSanitizer.html)
+GCC4.8及以上的版本，集成了AddressSanitizer。AddressSanitizer最初由google研发，简称asan, 用于运行时检测C/C++程序中的内存错误，相比较传统工具如valgind，运行速度快，检测到错误之后，输出信息非常详细，可以通过add2line符号化输出，从而直接定位到代码行，方便快速的定位问题。官方地址是[AddressSanitizer](http://clang.llvm.org/docs/AddressSanitizer.html)，
 它可以检测出的错误类型有:
 - use-after-free；
 - use-after-return；
