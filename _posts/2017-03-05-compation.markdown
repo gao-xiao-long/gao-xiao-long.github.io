@@ -31,7 +31,7 @@ LevelDB中有两种Compaction：
 
     allowed_seeks的设置在VersionSet::Builder::Apply()中,设置算法如下
     ![allowed_seeks](/img/in-post/leveldb/allow_seeks.png)
-3. 概率性的触发Compaction，这个是通过迭代器查找Key时触发，后面会有讲解。
+3. 概率性的触发Compaction，这个是通过迭代器查找Key时触发，后面会有讲解
 4. 手动触发Compaction
 
 说明：当条件1和条件2同时满足时，优先按照条件1选取Compaction文件(具体见:VersionSet::PickCompaction())。
@@ -40,28 +40,28 @@ LevelDB中有两种Compaction：
 
 LevelDB通过调用DBImpl::MaybeScheduleCompaction()函数来判断是否需要Compaction，如果需要，则调用Env::Schedule唤起Compaction。那么，调用MaybeScheduleCompaction()的时机有哪些呢？
 
-1. 数据库Open()
+1. **数据库Open()**
 
- 之所以在数据库打开时检查是否需要Compaction是因为存在以下可能：
+  之所以在数据库打开时检查是否需要Compaction是因为存在以下可能：
   - 打开一个已经存在的数据库时，可能需要从WAL log文件中恢复数据到Memtable，如果Memtable的大小在重新打开时设置的比上次小，则有可能产生多次imuutable, 进而生成多个新的SST文件(immutable dump生成),达到Compaction阈值(kL0_CompactionTrigger)
   - 上次数据库关闭时正好已经触发了Compaction操作，只是操作还没有来得及执行或执行到一半，所以在数据库再次打开时重新执行Compaction操作。
 
-2. Write()调用
+2. **Write()调用**
 
- 之所以每次Write操作时都要检查是否Compaction是因为存在以下可能：
+  之所以每次Write操作时都要检查是否Compaction是因为存在以下可能：
   - Write操作时可能Memtable大小已经达到最大阈值，进而生成immutable，这时候需要Compaciton将immutable dump成SST文件
   - Write操作太快，Compaction速度赶不上Write速度，导致Level0层积累的文件达到了Compaction的阈值(kL0_CompactionTrigger)
 
-3. Get()调用
+3. **Get()调用**
 
   之所以每次Get操作时都要检查是否Compaction是因为Get()调用可能会使某个SST文件到
   allowed_seeks阈值
 
-4. Iterator调用
+4. **Iterator调用**
 
   迭代器实例(DBIter)在每执行一次Next()或Prev()操作时，都会对读取的字节数(key.size()+value.size())进行计数(bytes_counter_)。当bytes_counter_达到一个累积值时(bytes_counter_的设置为以kReadBytesPeriod为平均值的随机数)，就会对迭代器的当前Key进行探测,检查是否有相同的Key存在不同的文件中，当发下这种情况，则会将发现此Key的第一个文件设置成下次要Compaction的文件。
 
-5. Compcation操作后
+5. **Compcation操作后**
 
   上一次的Compaction操作可能会在某个Level中生成很多新文件，这些新文件可能又会达到Compaction阈值，所以每次Compaction操作之后会检查是否需要再次Compaction
 
