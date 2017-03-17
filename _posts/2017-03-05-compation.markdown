@@ -40,7 +40,7 @@ LevelDB中有两种Compaction：
 
 LevelDB通过调用DBImpl::MaybeScheduleCompaction()函数来判断是否需要Compaction，如果需要，则调用Env::Schedule唤起Compaction。那么，调用MaybeScheduleCompaction()的时机有哪些呢？
 
- **数据库Open**
+1. **数据库Open**
 
     之所以在数据库打开时检查是否需要Compaction是因为存在以下可能：
 
@@ -65,7 +65,7 @@ allowed_seeks阈值
 
 5. **Compcation操作后**
 
-    上一次的Compaction操作可能会在某个Level中生成很多新文件，这些新文件可能又会达到Compaction阈值，所以每次Compaction操作之后会检查是否需要再次Compaction
+  上一次的Compaction操作可能会在某个Level中生成很多新文件，这些新文件可能又会达到Compaction阈值，所以每次Compaction操作之后会检查是否需要再次Compaction
 
 从上面的分析看出引发Compaction的操作无处不在，Get、Write、Iterator都可能引发Compaction。
 MaybeScheduleCompaction()原型如下：
