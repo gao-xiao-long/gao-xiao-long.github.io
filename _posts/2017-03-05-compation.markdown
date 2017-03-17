@@ -8,9 +8,9 @@ tags:
     - leveldb                                                                                          
 ---                                                                                                    
 
-LevelDB是底层采用了LSM实现，Compaction操作是LSM的核心，所谓Compaction就是将现有的SST文件进行压缩合并，生成新SST文件过程。 Compaction操作的主要目的有两个:
+Compaction操作是LSM的核心，所谓Compaction就是将现有的SST文件进行压缩合并，生成新SST文件过程。 Compaction操作的主要目的有两个:
 1. 通过减少文件的增长量来保证读操作的性能
-2. 通过合并文件来消除其中重复更新的或者删除的Key。
+2. 通过合并文件来删除相同Key的重复更新的或者删除的Key。
 
 由于与Compaction相关的逻辑贯穿在整个LevelDB代码库，扣起细节来会太过繁琐，所以本文力求在整体上对Compaction分析，实现细节上不会有过多阐述。
 
@@ -23,10 +23,10 @@ LevelDB中有两种Compaction：
 
 #### Compaction触发条件
 
-满足一下的任意一种条件都会触发Compaction操作：
+满足一下的任意一种条件都会需要进行Compaction操作：
 1. 每个level中SST文件总数目或者总大小阈值(表现为compaction_score_ >= 1)
 
-    在LevelDB中， 如果level-0文件数目达到kL0_CompactionTrigger或其他level的文件总大小达到一定阈值MaxBytesForLevel(),均会触发Compaction操作。 每次新版本生成时都会判断是否文件达到阈值(VersionSet::Finalize()中)
+    在LevelDB中，如果level-0文件数目达到kL0_CompactionTrigger，或其他level的文件总大小达到一定阈值MaxBytesForLevel()，均需要Compaction操作。 每次新版本生成时都会判断是否文件达到阈值(VersionSet::Finalize()中)
 2. 某个SST文件被读取次数到达阈值(FileMetaData::allowed_seeks)
 
     allowed_seeks的设置在VersionSet::Builder::Apply()中,设置算法如下
@@ -39,20 +39,23 @@ LevelDB中有两种Compaction：
 #### 何时检查是否需要Compaction
 
 LevelDB通过调用DBImpl::MaybeScheduleCompaction()函数来判断是否需要Compaction，如果需要，则调用Env::Schedule唤起Compaction。那么，调用MaybeScheduleCompaction()的时机有哪些呢？
+
 1. 数据库Open()
 
-     之所以在数据库打开时检查是否需要Compaction是因为存在以下可能：
-    - 打开一个已经存在的数据库时，可能需要从WAL log文件中恢复数据到Memtable，如果Memtable的大小在重新打开时设置的比上次小，则有可能产生多次imuutable, 进而生成多个新的SST文件(immutable dump生成),达到Compaction阈值(kL0_CompactionTrigger)
-    - 上次数据库关闭时正好已经触发了Compaction操作，只是操作还没有来得及执行或执行到一半，所以在数据库再次打开时重新执行Compaction操作。
+ 之所以在数据库打开时检查是否需要Compaction是因为存在以下可能：
+  - 打开一个已经存在的数据库时，可能需要从WAL log文件中恢复数据到Memtable，如果Memtable的大小在重新打开时设置的比上次小，则有可能产生多次imuutable, 进而生成多个新的SST文件(immutable dump生成),达到Compaction阈值(kL0_CompactionTrigger)
+  - 上次数据库关闭时正好已经触发了Compaction操作，只是操作还没有来得及执行或执行到一半，所以在数据库再次打开时重新执行Compaction操作。
 
 2. Write()调用
 
-  之所以每次Write操作时都要检查是否Compaction是因为存在以下可能：
-     - Write操作时可能Memtable大小已经达到最大阈值，进而生成immutable，这时候需要Compaciton将immutable dump成SST文件
-     - Write操作太快，Compaction速度赶不上Write速度，导致Level0层积累的文件达到了Compaction的阈值(kL0_CompactionTrigger)
+ 之所以每次Write操作时都要检查是否Compaction是因为存在以下可能：
+  - Write操作时可能Memtable大小已经达到最大阈值，进而生成immutable，这时候需要Compaciton将immutable dump成SST文件
+  - Write操作太快，Compaction速度赶不上Write速度，导致Level0层积累的文件达到了Compaction的阈值(kL0_CompactionTrigger)
 
 3. Get()调用
-      之所以每次Get操作时都要检查是否Compaction是因为Get()调用可能会使某个SST文件达到allowed_seeks阈值
+
+  之所以每次Get操作时都要检查是否Compaction是因为Get()调用可能会使某个SST文件到
+  allowed_seeks阈值
 
 4. Iterator调用
 
@@ -60,7 +63,7 @@ LevelDB通过调用DBImpl::MaybeScheduleCompaction()函数来判断是否需要C
 
 5. Compcation操作后
 
-    上一次的Compaction操作可能会在某个Level中生成很多新文件，这些新文件可能又会达到Compaction阈值，所以每次Compaction操作之后会检查是否需要再次Compaction
+  上一次的Compaction操作可能会在某个Level中生成很多新文件，这些新文件可能又会达到Compaction阈值，所以每次Compaction操作之后会检查是否需要再次Compaction
 
 从上面的分析看出引发Compaction的操作无处不在，Get、Write、Iterator都可能引发Compaction。
 MaybeScheduleCompaction()原型如下：
