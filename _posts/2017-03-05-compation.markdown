@@ -54,12 +54,12 @@ LevelDB通过调用DBImpl::MaybeScheduleCompaction()函数来判断是否需要C
 
 3. **Get调用**
 
-  之所以每次Get操作时都要检查是否Compaction是因为Get()调用可能会使某个SST文件到
-  allowed_seeks阈值
+  之所以每次Get操作时都要检查是否Compaction是因为Get()调用可能会使某个SST文件达到
+allowed_seeks阈值
 
 4. **Iterator调用**
 
-  迭代器实例(DBIter)在每执行一次Next()或Prev()操作时，都会对读取的字节数(key.size()+value.size())进行计数(bytes_counter_)。当bytes_counter_达到一个累积值时(bytes_counter_的设置为以kReadBytesPeriod为平均值的随机数)，就会对迭代器的当前Key进行探测,检查是否有相同的Key存在不同的文件中，当发下这种情况，则会将发现此Key的第一个文件设置成下次要Compaction的文件。
+    迭代器实例(DBIter)在每执行一次Next()或Prev()操作时，都会对读取的字节数(key.size()+value.size())进行计数(bytes_counter_)。当bytes_counter_达到一个累积值时(bytes_counter_的设置为以kReadBytesPeriod为平均值的随机数)，就会对迭代器的当前Key进行探测,检查是否有相同的Key存在不同的文件中，当发下这种情况，则会将发现此Key的第一个文件设置成下次要Compaction的文件。
 
 5. **Compcation操作后**
 
