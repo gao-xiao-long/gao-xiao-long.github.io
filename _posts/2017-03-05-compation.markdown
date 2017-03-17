@@ -110,7 +110,118 @@ MaybeScheduleCompaction()原型如下：
 需要注意的是：每遍历一个Key时都会先检查immutable是否存在，如果存在的话会优先将其dump成SST文件以保证写操作不会被阻塞。 会丢弃已经删除的数据(kTypeDeletion)及重复数据的旧数据
 
 
-#### 其他，关于迭代器
+#### 关于迭代器
+
 不管是Immutable Compaction还是File Compaction, 在Compaction过程中需要通过Iterator对指定的文件集合进行按需遍历，都使用了大量的迭代器。了解迭代器对从代码上理解Compaction有很大帮助，这里大概再介绍下LevelDB中的迭代器。
 
-LevelDB在DBIter类中实现迭代器，
+![pic](/img/in-post/leveldb/iter_all.png)
+
+##### DBIter
+
+> 定义：db/db_iter.cc
+
+DBIter是一个InternalIterator的封装,即是MergingIterator的封装。DBIter的工作是解析由InternalIterator返回的InternalKeys，将其变成UserKeys(InternalKey和UserKey的区别可以参照[这篇文章](http://gao-xiao-long.github.io/2016/09/24/memtable/))
+举例：
+InternalIterator返回如下结果:
+
+```c++
+InternalKey(user_key="Key1", seqno=10, Type=Put)    | Value = "KEY1_VAL2"
+InternalKey(user_key="Key1", seqno=9,  Type=Put)    | Value = "KEY1_VAL1"
+InternalKey(user_key="Key2", seqno=16, Type=Put)    | Value = "KEY2_VAL2"
+InternalKey(user_key="Key2", seqno=15, Type=Delete) | Value = "KEY2_VAL1"
+InternalKey(user_key="Key3", seqno=7,  Type=Delete) | Value = "KEY3_VAL1"
+InternalKey(user_key="Key4", seqno=5,  Type=Put)    | Value = "KEY4_VAL1"
+```
+通过DBIter，会取最新的Key且有效的Key值，然后暴露给用户的结果如下：
+
+```c++
+Key="Key1"  | Value = "KEY1_VAL2"
+Key="Key2"  | Value = "KEY2_VAL2"
+Key="Key4"  | Value = "KEY4_VAL1"
+```
+
+##### MergingIterator
+
+> 定义: table/merger.cc
+
+MergingIterator由许多子迭代器构成，在MergingIterator会将所有子迭代器显示为一个排序流。
+举例：
+下面是MergingIterator子迭代器的展开形式
+
+```c++
+= Child Iterator 1 =
+InternalKey(user_key="Key1", seqno=10, Type=Put)    | Value = "KEY1_VAL2"
+
+= Child Iterator 2 =
+InternalKey(user_key="Key1", seqno=9,  Type=Put)    | Value = "KEY1_VAL1"
+InternalKey(user_key="Key2", seqno=15, Type=Delete) | Value = "KEY2_VAL1"
+InternalKey(user_key="Key4", seqno=5,  Type=Put)    | Value = "KEY4_VAL1"
+
+= Child Iterator 3 =
+InternalKey(user_key="Key2", seqno=16, Type=Put)    | Value = "KEY2_VAL2"
+InternalKey(user_key="Key3", seqno=7,  Type=Delete) | Value = "KEY3_VAL1"
+```
+MergingIterator会将其对外展示成如下的排序流
+
+```c++
+InternalKey(user_key="Key1", seqno=10, Type=Put)    | Value = "KEY1_VAL2"
+InternalKey(user_key="Key1", seqno=9,  Type=Put)    | Value = "KEY1_VAL1"
+InternalKey(user_key="Key2", seqno=16, Type=Put)    | Value = "KEY2_VAL2"
+InternalKey(user_key="Key2", seqno=15, Type=Delete) | Value = "KEY2_VAL1"
+InternalKey(user_key="Key3", seqno=7,  Type=Delete) | Value = "KEY3_VAL1"
+InternalKey(user_key="Key4", seqno=5,  Type=Put)    | Value = "KEY4_VAL1"
+```
+
+##### MemtableIterator
+
+> 定义：db/memtable.cc
+>
+它用于完成对memtable或者immutable memtable的迭代遍历，本质上是一个基于SkipList的迭代器。
+
+#####BlockIter
+
+> 定义：table/block.cc
+
+由于SST文件的块数据是按序排列且不可变的，我们可以将其加载到内存中，并为这些排序数据创建一个BlockIter。
+
+##### TwoLevelIterator
+
+> 定义：table/two_level_iterator.cc
+
+TwoLevelIterator由两个迭代器组成：
+- First level iterator(index_iter_)
+- Second level iterator(data_iter_)
+index_iter_是指向Index block的迭代器。 data_iter_是指向Data block的迭代器。下面看一下一个SST文件的简化表示,
+下面有4个数据块及1个索引快
+
+```c++
+[Data block, offset: 0x0000]
+KEY1  | VALUE1
+KEY2  | VALUE2
+KEY3  | VALUE3
+
+[Data Block, offset: 0x0100]
+KEY4  | VALUE4
+KEY7  | VALUE7
+
+[Data Block, offset: 0x0250]
+KEY8  | VALUE8
+KEY9  | VALUE9
+
+[Data Block, offset: 0x0350]
+KEY11 | VALUE11
+KEY15 | VALUE15
+
+[Index Block, offset: 0x0500]
+KEY3  | 0x0000
+KEY7  | 0x0100
+KEY9  | 0x0250
+KEY15 | 0x0500
+```
+可以通过创建TwoLevelIterator来读取此文件，当通过TwoLevelIterator来查找KEY8时，第一步通过使用index_iter_确定哪个块会包含此键。
+上面的例子中，第3个数据块可能包含此键，所以data_iter_会指向偏移为0x0250的位置。之后会使用data_iter_在响应的数据块中找到需要的键值对。
+
+Done。
+
+参考：
+[rocksdb wiki](https://github.com/facebook/rocksdb/wiki/Iterator-Implementation)
