@@ -108,13 +108,15 @@ Compaction以文件为操作单元，即每次Compaction只能将整个SST文件
 1. 通过VersionSet::PickCompaction() 选择要合并的Level L(current_->compaction_level_)及Leve L中的文件
 2. 通过VersionSet::SetupOtherInputs()选择Level L+1 中与Level L中选取的文件存在Key重叠的文件（此时可能会扩大Level L中文件数量）。    
 3. 调用DBImpl::DoCompactionWork()对Level L 及 Level L+1 中文件进行合并
-    合并的流程是通过构造一个MergingIterator来将所有的输入文件组织成一个有序的输入流遍历迭代器，将Level L 及Level L+1中所有数据dump成Level+1中的新文件。需要注意的是：每遍历一个Key时都会先检查immutable是否存在，如果存在的话会优先将其dump成SST文件以保证写操作不会被阻塞。 会丢弃已经删除的数据(kTypeDeletion)及重复数据的旧数据
+    合并的流程是通过构造一个MergingIterator来将所有的输入文件组织成一个有序的输入流遍历迭代器，将Level L 及Level L+1中所有数据dump成Level+1中的新文件。遍历迭代器时会丢弃已经删除的数据(kTypeDeletion)及过期的数据。需要注意的是：每遍历一个Key时都会先检查immutable是否存在，如果存在的话会优先将其dump成SST文件以保证写操作不会被阻塞。
 
 #### 关于迭代器
 
 不管是Immutable Compaction还是File Compaction, 在Compaction过程中需要通过Iterator对指定的文件集合进行按需遍历，都使用了大量的迭代器。了解迭代器对从代码上理解Compaction有很大帮助，这里大概再介绍下LevelDB中的迭代器。
 
 ![pic](/img/in-post/leveldb/iter_all.png)
+
+上图是LevelDB中整个迭代器的关系。大致分为DBIter、MergingIterator、MemtableIterator、TwoLevelIterator、BlockIter。
 
 ##### DBIter
 
@@ -175,7 +177,7 @@ InternalKey(user_key="Key4", seqno=5,  Type=Put)    | Value = "KEY4_VAL1"
 ##### MemtableIterator
 
 > 定义：db/memtable.cc
->
+
 它用于完成对memtable或者immutable memtable的迭代遍历，本质上是一个基于SkipList的迭代器。
 
 #####BlockIter
@@ -191,6 +193,7 @@ InternalKey(user_key="Key4", seqno=5,  Type=Put)    | Value = "KEY4_VAL1"
 TwoLevelIterator由两个迭代器组成：
 - First level iterator(index_iter_)
 - Second level iterator(data_iter_)
+
 index_iter_是指向Index block的迭代器。 data_iter_是指向Data block的迭代器。下面看一下一个SST文件的简化表示,
 下面有4个数据块及1个索引快
 
@@ -219,9 +222,9 @@ KEY9  | 0x0250
 KEY15 | 0x0500
 ```
 可以通过创建TwoLevelIterator来读取此文件，当通过TwoLevelIterator来查找KEY8时，第一步通过使用index_iter_确定哪个块会包含此键。
-上面的例子中，第3个数据块可能包含此键，所以data_iter_会指向偏移为0x0250的位置。之后会使用data_iter_在响应的数据块中找到需要的键值对。
+上面的例子中，第3个数据块可能包含此键，所以data_iter_会指向偏移为0x0250的位置。之后会使用data_iter_在相应的数据块中找到需要的键值对。
 
-Done。
+Compaction基本分析完成。
 
 参考：
 
