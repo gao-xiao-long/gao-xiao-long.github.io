@@ -35,3 +35,5 @@ Page Cache换出到磁盘触发条件有两个
 参考：
 
 深入Linux内核架构
+
+[Kernel Documents/mmap] (http://kernel.taobao.org/index.php?title=Kernel_Documents/mmap_18_32)
