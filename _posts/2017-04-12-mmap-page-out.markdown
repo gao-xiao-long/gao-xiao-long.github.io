@@ -50,8 +50,9 @@ Linux内核的基本设计决策之一是：缓存通常不是固定长度的，
 
 #### 回到问题
 回到我们系统遇到的问题上，系统使用了mmap将文件通过MAP_SHARED方式映射到了内存。并且部署在虚拟化平台，系统默认关闭了swap。性能出问题的时间点Page Cache和MEM FREE发生了明显的变化，且程序实际占用的RES(程序实际占用的物理内存)及SHR(程序使用Page Cache的物理内存)都有下降。
-[!图](/img/in-post/mem-cache.png)/
- ![图](/img/in-post/top-cache.png)
+[!图](/img/in-post/mem-cache.png)
+
+![图](/img/in-post/top-cache.png)
 
 最终定位到原因是虚拟化平台其他程序大量占用Page Cache导致mmap映射的页面被回收导致。结合问题及上面对页面回收的描述。有两个方法可以解决：
 1. 使用mmap映射时指定MAP_PRIVATE参数：这有两个前提：1. swap功能被关闭 2. 索引文件为只读
