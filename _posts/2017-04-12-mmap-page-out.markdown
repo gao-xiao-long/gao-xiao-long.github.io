@@ -67,14 +67,14 @@ Linux内核的基本设计决策之一是：缓存通常不是固定长度的，
 ![图](/img/in-post/proc_status.png)
 
 说明：
-1. costtime_avg：程序平均响应时间
-2. log_pv_cnt：    程序处理的访问请求数
-3. io_read_kb：    程序读IO大小
-4. resident_mem:   程序占用内存大小
-5. proc_cpu_usage: 程序对CPU的利用率
-6. proc_cpu_usage_per_core:  每个核对CPU的利用率
-7. proc_io_write_kb：程序写IO大小
-8. proc_net_fd_num: 网络句柄大小
+* costtime_avg：程序平均响应时间
+* log_pv_cnt：    程序处理的访问请求数
+* io_read_kb：    程序读IO大小
+* resident_mem:   程序占用内存大小
+* proc_cpu_usage: 程序对CPU的利用率
+* proc_cpu_usage_per_core:  每个核对CPU的利用率
+* proc_io_write_kb：程序写IO大小
+* proc_net_fd_num: 网络句柄大小
 
 **分析：**
 1. 从上面机器整体看到，程序运行在16核物理机上，出问题的时间点CPU整体正常(IDLE大约80， 单核load avg大概在1.25), 排除是机器CPU打满导致的问题
