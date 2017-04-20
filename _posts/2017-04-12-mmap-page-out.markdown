@@ -31,10 +31,12 @@ Linux内核的基本设计决策之一是：缓存通常不是固定长度的，
 **页面回收时机：**
 
 用于页缓存的物理页面无法被页面的使用者主动释放，因为它们不知道这些页面何时应该被释，Linux 操作系统使用如下这两种机制检查系统内存的使用情况，从而确定可用的内存是否太少从而需要进行页面回收。
-- 周期性的检查：这是由后台运行的守护进程kswapd完成的。该进程定期检查当前系统的内存使用情况，当发现系统内空闲的物理页面数目少于特定的阈值时，该进程就会发起页面回收的操作。
+- 周期性的检查：这是由后台运行的守护进程kswapd完成的。该进程定期检查当前系统的内存使用情况，当发现系统内空闲的物理页面数目少于特定的阈值时，该进程就会发起页面回收的操作。kswapd通过判断watermark[min/low/high]这三个值来判断是否进行页面回收，当系统空闲内存低于watermark[low]时，会启动回收，直到内存空闲数量达到watermark[high]后停止回收。可以通过查看 /proc/zoneinfo 得到min/low/high的值，单位为"页数" (这里面又涉及到NUMA及zone等概念，不再展开，想要详细了解的可以参考文章最后面列出的参考资料),一般线上系统设置的watermark[low]在几十兆左右。
 - “内存严重不足”事件的触发：在某些情况下，比如，操作系统忽然需要通过伙伴系统(malloc()等调用触发)为用户进程分配一大块内存，或者需要创建一个很大的缓冲区，而当时系统中的内存没有办法提供足够多的物理内存以满足这种内存请求，这时候，操作系统就必须尽快进行页面回收操作，以便释放出一些内存空间从而满足上述的内存请求。（这种页面回收方式也被称作“直接页面回收”，会阻塞掉操作进程。）
 
 如果操作系统在进行了内存回收操作之后仍然无法回收到足够多的页面以满足上述内存要求，那么操作系统只有最后一个选择，那就是使用 OOM( out of memory )killer，它从系统中挑选一个最合适的进程杀死它，并释放该进程所占用的所有页面。
+
+
 
 **页面回收细节：**
 
@@ -91,8 +93,9 @@ Linux内核的基本设计决策之一是：缓存通常不是固定长度的，
 
 #### 参考：
 
-深入Linux内核架构
-
-[Linux2.6中的页面回收与反向映射](https://www.ibm.com/developerworks/cn/linux/l-cn-pagerecycle/)
-
-[Kernel Documents/mmap](http://kernel.taobao.org/index.php?title=Kernel_Documents/mmap_18_32)
+1. 深入Linux内核架构
+2. [Linux2.6中的页面回收与反向映射](https://www.ibm.com/developerworks/cn/linux/l-cn-pagerecycle/)
+3. [Deep dive into linux memory management](http://balodeamit.blogspot.com/2015/11/deep-dive-into-linux-memory-management.html)
+4. [How the Linux kernel divides up your RAM](https://utcc.utoronto.ca/~cks/space/blog/linux/KernelMemoryZones)
+5. [Kernel Documents/mmap](http://kernel.taobao.org/index.php?title=Kernel_Documents/mmap_18_32)
+6. [Kerynal Documents/mm sysctl](http://kernel.taobao.org/index.php?title=Kernel_Documents/mm_sysctl)
