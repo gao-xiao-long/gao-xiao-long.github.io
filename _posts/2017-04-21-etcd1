@@ -1,0 +1,19 @@
+layout: post
+title: etcd源码剖析：etcd介绍
+date: 2017-03-18
+author: "gao-xiao-long"
+catalog: true
+tags:
+    - etcd
+---
+
+#### 写在前面
+之前写了一系列的文章来剖析leveldb的实现，对单机存储有了整体的把握，后面主要的精力都会投入到对etcd的剖析上。之所以选择剖析etcd主要是因为它采用了raft一致性算法并且使用了go语言，而raft和go都是自己想要深入学习的。
+由于工作及家庭的各方面原因，每周只能投入少量时间到etcd里，所以预计这次etcd的剖析也会经历比较长的时间，不管怎样，贵在坚持吧。
+
+#### 什么是etcd
+官方对etcd的定义为
+> etcd is a distributed, consistent key-value store for shared configuration and service discovery
+即，它是一个用于配置共享和服务发现的分布式KV库。
+之所以叫做etcd，是取自于unit的“/etc”文件夹及"distributed system"中首字母‘d’的结合。"/etc"文件夹用于存储单机的配置数据，而etcd用来存储大规模分布式系统的配置数据。(这些数据也被成为metadata)。
+主要注意的是，etcd仅仅适用于存储元数据或者协调分布式应用程序，如果存储的数据超过几个GB(TODO:是否会排序？单机的存储也不应该只有几个G啊)，不应该选择使用etcd。主要的原因是etcd会将所有的数据都复制到一个副本集中，底层没有数据分片机制。
