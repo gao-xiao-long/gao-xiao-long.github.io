@@ -172,13 +172,9 @@ send()仅仅是把应用层buffer的数据拷贝进socket的内核发送buffer�
 /proc/sys/net/core/wmem_max	"110592"	定义发送窗口的最大大小；对于更大的 BDP 来说，这个大小也应该更大。
 3. 实际线上环境如何查看Recv-Q和Send-Q状态
 
-2. 线上压测的一些误区： 通过服务端的日志条数及耗时来给出服务的极限QPS，这有很大的漏洞及隐患。
-参考：
-1. 阿里技术嘉年华046-海量服务之过载保护
-2. 服务器过载保护（上篇）——过载介绍(http://wetest.qq.com/lab/view/69.html)
-3. 服务器过载保护（下篇）——过载处理新方案(http://wetest.qq.com/lab/view/70.html)
-6. Cache应用中的服务过载案例研究(http://tech.meituan.com/avalanche-study.html）
-7. Linux Tune Network Stack (Buffers Size) To Increase Networking Performance(https://www.cyberciti.biz/faq/linux-tcp-tuning/)
 
-http://blog.csdn.net/Joanna_yan/article/details/51226211
-http://blog.csdn.net/Joanna_yan/article/details/51226211
+##### 参考：
+1. 腾讯后台开发技术总监浅谈过载保护
+2. 阿里技术嘉年华046-海量服务之过载保护
+3. [服务器过载保护（上篇）——过载介绍](http://wetest.qq.com/lab/view/69.html)
+4. [服务器过载保护（下篇）——过载处理新方案](http://wetest.qq.com/lab/view/70.html)
