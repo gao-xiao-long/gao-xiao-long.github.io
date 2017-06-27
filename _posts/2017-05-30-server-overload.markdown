@@ -140,7 +140,7 @@ Proxy由多个下游组成，有可能出现某个下游模块因为功能升级
 * W： 平均响应时间
 
 我们可以将Little's raw应用在限流应用中：通过设置一个最大并发值(max_concurrency)来限制并发量。计算公式为：max_concurrency = QPS * RT(后端系统平均响应时间, 单位为秒)。一般来说后端RT是稳定的，再加上后端系统可以处理的QPS值，就能得到max_concurrency值。比如，后端系统响应时间=0.2s，可以处理的QPS为200。那么设置max_concurrency = 40即可。在具体实现时，可以将max_concurrency定义为一个int类型的值。并且有一个当前并发的计数：curr_concurrency。每来一个请求，判断curr_concurrency是否已经达到max_concurrency，如果是直接拒绝请求，否则curr_concurrency原子性的加1，当请求处理结束(包括超时)时，curr_concurrency原子性减1。（过程类似于食堂某个窗口排队打饭过程。）    
-这种并发控制方式有如下有点：
+这种并发控制方式有如下优点：
 * 实现起来性能非常高(只需要原子性的对curr_concurrency加1或者减1)
 * 设置好了max_concurrency后，当系统的处理时间(RT)变化时，允许的QPS也会跟着变化，比如当系统升级导致后端RT上升后，后端系统理论上可以承担的QPS也会降低，这种max_concurrency则可以正好吻合这种变化，有效的保护后端系统。
 

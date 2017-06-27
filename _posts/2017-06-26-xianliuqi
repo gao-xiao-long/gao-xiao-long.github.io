@@ -12,7 +12,21 @@ tags:
 
 1. Little's Law:
 
-L=\lambda W\,
+L = λW
+
+定义：
+
+用在科学计算中：
+L: 平均队列长度
+Lambda： 平均吞吐率
+W： 平均响应时间
+
+
+ qps* latency
+
+
+给出数学曲线图
+
 
 PS: 也可以用作线程池调优
 
