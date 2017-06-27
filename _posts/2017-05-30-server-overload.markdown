@@ -135,9 +135,9 @@ Proxy由多个下游组成，有可能出现某个下游模块因为功能升级
 
 **PS:一种基于Little‘s raw的单机并发控制的方法：**  
 常见的单机并发控制一般使用令牌桶或者漏桶方式，还有一种基于排队理论中的[Little's raw](https://en.wikipedia.org/wiki/Little%27s_law) (利特儿法则)方式却很少被提及。 Little's raw的公式为 L = λW。用在计算机工程的队列中，可以认为：
-* L: 平均队列长度
-* Lambda： 平均的吞吐率
-* W： 平均响应时间
+* L：平均队列长度
+* Lambda：平均的吞吐率
+* W：平均响应时间
 
 我们可以将Little's raw应用在限流应用中：通过设置一个最大并发值(max_concurrency)来限制并发量。计算公式为：max_concurrency = QPS * RT(后端系统平均响应时间, 单位为秒)。一般来说后端RT是稳定的，再加上后端系统可以处理的QPS值，就能得到max_concurrency值。比如，后端系统响应时间=0.2s，可以处理的QPS为200。那么设置max_concurrency = 40即可。在具体实现时，可以将max_concurrency定义为一个int类型的值。并且有一个当前并发的计数：curr_concurrency。每来一个请求，判断curr_concurrency是否已经达到max_concurrency，如果是直接拒绝请求，否则curr_concurrency原子性的加1，当请求处理结束(包括超时)时，curr_concurrency原子性减1。（过程类似于食堂某个窗口排队打饭过程。）    
 这种并发控制方式有如下优点：
