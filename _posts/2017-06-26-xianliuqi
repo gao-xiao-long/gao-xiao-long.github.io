@@ -1,0 +1,22 @@
+---
+layout: post
+title: 单机限流器的几种实现方式
+date: 2017-06-26
+author: "gao-xiao-long"
+catalog: true
+tags:
+    - 基础技术
+---
+
+
+
+1. Little's Law:
+
+L=\lambda W\,
+
+PS: 也可以用作线程池调优
+
+http://www.infoq.com/cn/articles/Java-Thread-Pool-Performance-Tuning
+
+
+根据你的具体需要，你可能会想要调整某个Command的线程池大小，例如你对某个依赖的调用平均响应时间为200ms，而峰值的QPS是200，那么这个并发至少就是 0.2 x 200 = 40 (Little's Law)，考虑到一定的宽松度，这个线程池的大小设置为60可能比较合适.
