@@ -133,14 +133,15 @@ Proxy由多个下游组成，有可能出现某个下游模块因为功能升级
 * 单机并发控制：优点：并发配置简单，无需与其他实例耦合。缺点：它的前提条件是到达Proxy每个实例的流量是均匀的，只适合上游访问每个Proxy实例的概率相同时，当上游采用其他非随机算法访问Proxy实例时，此方法会失效。  
 * 全局并发控制：优点：集中式并发控制，无需限定上游访问Proxy采用的负载均衡策略；缺点：Proxy每次请求均需要访问全局并发计数模块，并且需要各Proxy实例实时上报并发信息到全局并发计数模块，实现起来有一定复杂度。
 
-**PS:一种基于Little‘s raw的单机并发控制的方法：**
+**PS:一种基于Little‘s raw的单机并发控制的方法：**  
 常见的单机并发控制一般使用令牌桶或者漏桶方式，还有一种基于排队理论中的[Little's raw](https://en.wikipedia.org/wiki/Little%27s_law) (利特儿法则)方式却很少被提及。 Little's raw的公式为 L = λW。用在计算机工程的队列中，可以认为：
 * L: 平均队列长度
 * Lambda： 平均的吞吐率
 * W： 平均响应时间
-Little's raw应用在限流应用中，我们可以通过设置一个最大并发值(max_concurrency)来限制并发量。计算公式为max_concurrency = QPS * RT(后端系统平均响应时间)。一般来说RT是稳定的，再加上后端系统可以处理的QPS值，就能得到max_concurrency值。    
-在线上系统具体实现时，可以将max_concurrency定义为一个int类型的值。并且有一个当前并发的计数：Atomic<int> curr_concurrency。每来一个请求，判断是否已经达到max_concurrency，如果是直接拒绝请求，否则curr_concurrency原子性的加1，当请求处理结束(包括超时)时，curr_concurrency原子性减1。过程类似于食堂某个窗口排队打饭过程。  
-这种方式有个优点有两个：
+
+我们可以将Little's raw应用在限流应用中：通过设置一个最大并发值(max_concurrency)来限制并发量。计算公式为max_concurrency = QPS * RT(后端系统平均响应时间)。一般来说RT是稳定的，再加上后端系统可以处理的QPS值，就能得到max_concurrency值。     
+在线上系统具体实现时，可以将max_concurrency定义为一个int类型的值。并且有一个当前并发的计数：Atomic<int> curr_concurrency。每来一个请求，判断是否已经达到max_concurrency，如果是直接拒绝请求，否则curr_concurrency原子性的加1，当请求处理结束(包括超时)时，curr_concurrency原子性减1。过程类似于食堂某个窗口排队打饭过程。    
+这种方式有个优点有两个： 
 1. 实现起来性能非常高(只需要原子性的对curr_concurrency加1或者减1)
 2. 设置好了max_concurrency后，当系统的处理时间(RT)变化时，允许的QPS也会跟着变化，比如当系统升级导致后端RT上升后，后端系统理论上可以承担的QPS也会降低，这种max_concurrency则可以正好吻合这种变化，有效的保护后端系统。
 
