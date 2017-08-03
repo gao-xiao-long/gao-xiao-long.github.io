@@ -58,7 +58,7 @@ for (int i = 0; i < arr.length(); i += 16) arr[i] *=3;
 
 ##### Memory fence及内存可见性
 前面讲到的的“invalidataion queue”及”store buffer”特性意味着，默认情况下，读操作有可能会读到过时的数据(如果对应的失效请求还invalidation queue中没有执行)，写操作真正完成的时间有可能比他们在代码中的位置晚(基于性能考虑)。
-加上程序编译时编译器的指令重排。 这就引出了并行编程领域的执行顺序性及内存可见性问题，即一个线程修改数据对象后，另一个线程在使用时是否能够看到该数据的最新状态。举个例子说明：  
+加上程序编译时编译器的指令重排,这就引出了并行编程领域的执行顺序性及内存可见性问题，即一个线程修改数据对象后，另一个线程在使用时是否能够看到该数据的最新状态。举个例子说明：  
 ```c++
 // 线程1
 obj.init();          // 初始化obj对象，只有初始化后才可以使用
@@ -118,7 +118,7 @@ unlock(mutex)
 
 **解决方法：**
 1. 尽量减少全局变量的共享，在一些写多读少的场景下，可以将写操作拆分到每个独立的thread local变量中，在需要读的时候再将其合并，以减少cacheline的同步。
-2. 可以让结构体或者变量按照cacheline对齐(通过 cat /proc/cpuinfo 中的cache_alignment字段得到cacheline大小), 防止多变量在同一个cacheline中。以gcc为例，可以这样设置： 
+2. 可以让结构体或者变量按照cacheline对齐(通过 cat /proc/cpuinfo 中的cache_alignment字段得到cacheline大小), 防止多变量在同一个cacheline中。以gcc为例，可以这样设置：
 ```c++
 int32_t  __attribute__((aligned(64))) global_var;
 ```

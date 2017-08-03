@@ -1,0 +1,10 @@
+### 快照：
+最简单的日志压缩方法，Raft的日志在正常操作中不断增长。快照将状态机的状态写入到快照中。服务器完成一次快照，就可以删除最后索引位置之前的所有日志和快照了。创建方式：当日志大小达到一个固定大小的时候就创建一次快照。
+
+### 源码剖析
+
+snapshotter库：
+主要是两个函数 SaveSnap及Load() 分别将raftpb中的Snapshot存储到磁盘，以及将磁盘中的最新的Snapshot反序列化成raftpb.Snapshot。
+文件存储格式
+名称： snapshot.Metadata.Term + snapshot.Metadata.Index + ".snapshot"
+内容：crc32， byte[]  其中crc32是byte的校验值，  byte为序列化的Snapshot，定义在snap/snappb/snap.proto中
