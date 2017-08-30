@@ -92,7 +92,8 @@ PS: kswapd每次回收到高水位后就会停止，不会回收太多内存，�
 使用mmap映射时指定MAP_LOCKED参数：指定此参数后mmap()函数会调用mlock()将内存区域锁定，防止被换出到磁盘，但是如果不是root账号只能锁定RLIMIT_MEMLOCK大小的内存(x86_64下默认为64K)，需要调大此参数或修改为ulimited
 
 
-毕
+**PS:相关命令**
+1. 查看进程锁定的内存大小： cat /proc/PID/status  | grep VmLck
 
 #### 参考：
 
