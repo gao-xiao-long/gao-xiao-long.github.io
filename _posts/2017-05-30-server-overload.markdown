@@ -171,3 +171,4 @@ Proxy由多个下游组成，有可能出现某个下游模块因为功能升级
 2. 阿里技术嘉年华046-海量服务之过载保护
 3. [服务器过载保护（上篇）——过载介绍](http://wetest.qq.com/lab/view/69.html)
 4. [服务器过载保护（下篇）——过载处理新方案](http://wetest.qq.com/lab/view/70.html)
+5. [Exponential Backoff And Jitter](https://www.awsarchitectureblog.com/2015/03/backoff.html)
