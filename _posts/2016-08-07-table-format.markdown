@@ -5,7 +5,7 @@ date: 2016-8-7
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - leveldb
+    - 1.leveldb
 ---
 
 SSTable为Sorted String Table的简称，用来存储一系列有序Kev-Value对。LevelDb中不同层级下有多个SSTable文件(.sst)，下面介绍单个SSTable文件的静态结构。
@@ -92,4 +92,3 @@ leveldb源码
 SST格式详解(1)
 
 http://www.samecity.com/blog/Article.asp?ItemID=100(LevelDb日知录之四：SSTable文件)
-

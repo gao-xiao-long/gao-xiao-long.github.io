@@ -8,3 +8,10 @@ snapshotter库：
 文件存储格式
 名称： snapshot.Metadata.Term + snapshot.Metadata.Index + ".snapshot"
 内容：crc32， byte[]  其中crc32是byte的校验值，  byte为序列化的Snapshot，定义在snap/snappb/snap.proto中
+
+package raft
+
+// unstable.entris[i] has raft log position i + unstable.offset.
+// Note that unstable.offset may be less than the hightest log position in storage;
+// this means that the next write to storage might need to truncate the log before
+// persisting unstable.entries

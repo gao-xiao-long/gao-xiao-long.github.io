@@ -1,0 +1,351 @@
+# 库的使用方法（内部基本概念）
+libraft库实现了选主、日志复制及节点管理等分布式协议中通用的逻辑，并提供了抽象的StateMachine接口，用户需要通过自定义StateMachine实现
+来满足业务需求。
+下面以实现一个简单的基于内存的KV数据库为例，讲解libraft的使用及内部实现机制
+实现代码路径如下： http://icode.baidu.com/repo/baidu%2Fpersonal-code%2Fraft_example/files/master/tree/
+
+示例中主要包含以下文件：
+state_machine.h/cpp: 定义了通用的状态机(class CommonStateMachine), 它实现了对Node(一个node代表一个raft实例)通用操作，包括set_peer、snapshot、shutdown等。
+基于业务逻辑的状态机实现（比如下面提到的SimpleKV）只需要继承此类即可。避免代码重复。
+
+simple_kv_service.h/cpp: 包括两部分：
+1. 业务状态机(class SimpleKV)，它实现了libraft中的StateMachine接口定义的函数，比如on_apply/on_snapshot_save等
+2. 对外服务的接口(SimpleKVServiceImpl),它实现了对外提供的接口（set()与get()）
+cli_service.h/cpp:
+定义了raft实例对外通用的rpc接口实现，包括set_peer/shutdown/snapshot等
+3. server.cpp： 初始化并启动一个server
+
+单个实例启动的主流程如下(server.cpp)：
+```
+int main(int argc, char* argv[]) {
+    google::ParseCommandLineFlags(&argc, &argv, true);
+
+    logging::ComlogSinkOptions options;
+    options.process_name = "simple_kv_server";
+    options.print_vlog_as_warning = false;
+    options.split_type = logging::COMLOG_SPLIT_SIZECUT;
+    if (logging::ComlogSink::GetInstance()->Setup(&options) != 0) {
+        LOG(ERROR) << "Fail to setup comlog";
+        return -1;
+    }
+    logging::SetLogSink(logging::ComlogSink::GetInstance());
+
+    // 1. 注册libraft service，此service实现了libraft库之间通信接口，比如pre_vote/request_vote/append_entries等(详见src/raft/raft_service.h)
+    baidu::rpc::Server server;
+    if (raft::add_service(&server, FLAGS_ip_and_port.c_str()) != 0) {
+        LOG(FATAL) << "Fail to init raft";
+        return -1;
+    }
+
+    // 2. 初始化Raft实例，包括状态机接口的实现及选举超时时间、Peers信息，Snapshot时间间隔设置
+    std::vector<raft::PeerId> peers;
+    const char* the_string_to_split = FLAGS_peers.c_str();
+    for (base::StringSplitter s(the_string_to_split, ','); s; ++s) {
+        raft::PeerId peer(std::string(s.field(), s.length()));
+        peers.push_back(peer);
+    }
+
+
+    base::EndPoint addr;
+    base::str2endpoint(FLAGS_ip_and_port.c_str(), &addr);
+    if (base::IP_ANY == addr.ip) {
+        addr.ip = base::get_host_ip();
+    }
+    example::SimpleKV* simple_kv = new example::SimpleKV(FLAGS_name, raft::PeerId(addr, 0));
+    raft::NodeOptions node_options;
+    node_options.election_timeout_ms = FLAGS_election_timeout_ms;
+    node_options.fsm = simple_kv;
+    node_options.initial_conf = raft::Configuration(peers); // bootstrap need
+    node_options.snapshot_interval_s = FLAGS_snapshot_interval;
+    node_options.log_uri = "local://./data/log";
+    node_options.stable_uri = "local://./data/stable";
+    node_options.snapshot_uri = "local://./data/snapshot";
+
+    if (0 != simple_kv->init(node_options)) {
+        LOG(FATAL) << "Fail to init node";
+        return -1;
+    }
+
+    // 3.1 注册对外服务Service 包括get()/set()等业务接口
+    example::SimpleKVServiceImpl service(simple_kv);
+    if (0 != server.AddService(&service,
+                               baidu::rpc::SERVER_DOESNT_OWN_SERVICE)) {
+        LOG(FATAL) << "Fail to AddService";
+        return -1;
+    }
+    // 3.2 注册对外服务的通用接口，包括snapshot()/shutdown()等
+    example::CliServiceImpl cli_service_impl(simple_kv);
+    if (0 != server.AddService(&cli_service_impl,
+                               baidu::rpc::SERVER_DOESNT_OWN_SERVICE)) {
+        LOG(FATAL) << "Fail to AddService";
+        return -1;
+    }
+
+    if (server.Start(FLAGS_ip_and_port.c_str(), NULL) != 0) {
+        LOG(FATAL) << "Fail to start server";
+        return -1;
+    }
+    LOG(INFO) << "Wait until server stopped";
+    server.RunUntilAskedToQuit();
+    LOG(INFO) << "SimpleKVServer is going to quit";
+
+    return 0;
+}
+```
+
+先重点看下第二步，即Raft实例的初始化。
+先从StateMachine讲起，StateMachine是libraft内部事件回调的接口，比如日志操作被提交(on_apply)，需要做snapshot等。
+libraft保证StateMachine中的所有接口都被串行提交，所以这些接口的实现可以非线程安全。下面先看下接口定义。
+```
+
+class StateMachine {
+public:
+    virtual ~StateMachine();
+
+    // on_apply函数会在一条或者多条通过Node::apply传递过来的日志被提交(committed)后(即gropu中大多数节点已经收到日志)调用。用户可通过此接口
+    // 将这些日志所表示的操作应用到业务的状态机中。
+    // 通过iter可以遍历所有已经提交(committed)的日志。
+    virtual void on_apply(::raft::Iterator& iter) = 0;
+
+
+    // 当次raft节点被shutdown后，所有未完成的操作结束时，会调用on_shutdown,通知用户这个状态机不再被使用。在此用户可以安全的释放占用的资源
+    // Note: 默认实现为"do nothing"
+    virtual void on_shutdown();
+
+    // libraft会定时(时间间隔由snapshot_interval指定)将状态机的状态写入到快照中。服务器完成一次快照，之后删除最后索引位置之前的所有日志和快照。这样做有两个好处：
+    //  1. 减少WAL日志的大小（快照之前的日志都可以被删除）
+    //  2. 加速节点启动：启动阶段不需要重新执行历史上所有的操作，只需要变为加载Snapshot和追加Snapshot之后的日志即可。
+    //
+    // user defined snapshot generate function, this method will block on_apply.
+    // user can make snapshot async when fsm can be cow(copy-on-write).
+    // call done->Run() when snapshot finished.
+    // success return 0, fail return errno
+    // Default: Save nothing and returns error.
+    virtual void on_snapshot_save(::raft::SnapshotWriter* writer,
+                                  ::raft::Closure* done);
+
+    // user defined snapshot load function
+    // get and load snapshot
+    // success return 0, fail return errno
+    // Default: Load nothing and returns error.
+    virtual int on_snapshot_load(::raft::SnapshotReader* reader);
+
+    // user defined leader start function
+    // [NOTE] user can direct append to node ignore this callback.
+    //        this callback can ensure read-consistency, after leader's first NO_OP committed
+    // Default: did nothing
+    virtual void on_leader_start();
+    virtual void on_leader_start(int64_t term);
+
+    // user defined leader start function
+    // [NOTE] this method called immediately when leader stepdown,
+    //        maybe before some method: apply success on_apply or fail done.
+    //        user sure resource available.
+    virtual void on_leader_stop();
+    virtual void on_leader_stop(const base::Status& status);
+
+    // on_error is called when
+    virtual void on_error(const ::raft::Error& e);
+
+    // Invoked when a configuration has been committed to the group
+    virtual void on_configuration_committed(const ::raft::Configuration& conf);
+
+    // this method is called when a follower stops following a leader and its leader_id becomes NULL,
+    // situations including:
+    // 1. handle election_timeout and start pre_vote
+    // 2. receive requests with higher term such as vote_request from a candidate
+    // or append_entires_request from a new leader
+    // 3. receive timeout_now_request from current leader and start request_vote
+    // the parameter stop_following_context gives the information(leader_id, term and status) about the
+    // very leader whom the follower followed before.
+    // User can reset the node's information as it stops following some leader.
+    virtual void on_stop_following(const ::raft::LeaderChangeContext& stop_following_context);
+
+    // this method is called when a follower or candidate starts following a leader and its leader_id
+    // (should be NULL before the method is called) is set to the leader's id,
+    // situations including:
+    // 1. a candidate receives append_entries from a leader
+    // 2. a follower(without leader) receives append_entries from a leader
+    // the parameter start_following_context gives the information(leader_id, term and status) about
+    // the very leader whom the follower starts to follow.
+    // User can reset the node's information as it starts to follow some leader.
+    virtual void on_start_following(const ::raft::LeaderChangeContext& start_following_context);
+
+};
+```
+先看下对外提供的接口实现：
+```
+void SimpleKVServiceImpl::get(::google::protobuf::RpcController* controller,
+                              const ::example::GetRequest* request,
+                              ::example::GetResponse* response,
+                              ::google::protobuf::Closure* done) {
+    baidu::rpc::ClosureGuard done_guard(done);
+    baidu::rpc::Controller* cntl = (baidu::rpc::Controller*)controller;
+
+    base::IOBuf data;
+    SimpleKVOpType type = GET;
+    data.append(&type, sizeof(type));
+    base::IOBufAsZeroCopyOutputStream wrapper(&data);
+    if (!request->SerializeToZeroCopyStream(&wrapper)) {
+        cntl->SetFailed(baidu::rpc::EREQUEST, "Fail to serialize request");
+        return;
+    }
+
+    SimpleKVClosure* c = new SimpleKVClosure;
+    c->cntl = cntl;
+    c->response = response;
+    c->done = done_guard.release();
+    return _simple_kv->apply(&data, c);
+}
+
+void SimpleKVServiceImpl::set(::google::protobuf::RpcController* controller,
+                          const ::example::SetRequest* request,
+                          ::example::SetResponse* response,
+                          ::google::protobuf::Closure* done) {
+    baidu::rpc::ClosureGuard done_guard(done);
+    baidu::rpc::Controller* cntl = (baidu::rpc::Controller*)controller;
+
+    base::IOBuf data;
+    SimpleKVOpType type = SET;
+    data.append(&type, sizeof(type));
+    base::IOBufAsZeroCopyOutputStream wrapper(&data);
+    if (!request->SerializeToZeroCopyStream(&wrapper)) {
+        cntl->SetFailed(baidu::rpc::EREQUEST, "Fail to serialize request");
+        return;
+    }
+
+    SimpleKVClosure* c = new SimpleKVClosure;
+    c->cntl = cntl;
+    c->response = response;
+    c->done = done_guard.release();
+    return _simple_kv->apply(&data, c);
+}
+
+```
+无论是get()接口还是set()接口，最终都会将数据组织成IOBuf形式，然后通过_simple_kv->apply()向复制组提交一条日志，当这个日志被大多数节点存储之后，libraft调用SimpleKV::on_apply，实现对请求的响应。
+```
+void SimpleKV::on_apply(raft::Iterator& iter) {
+    for (; iter.valid(); iter.next()) {
+        raft::Closure* done = iter.done();
+        baidu::rpc::ClosureGuard done_guard(done);
+        base::IOBuf data = iter.data();
+        SimpleKVOpType type;
+        data.cutn(&type, sizeof(type));
+
+        if (type == SET) {
+            fsm_set(done, &data);
+        } else if (type == GET) {
+            fsm_get(done, &data);
+        } else {
+            CHECK(false) << "bad log format, type: " << type;
+        }
+
+        if (done) {
+            raft::run_closure_in_bthread(done_guard.release());
+        }
+    }
+}
+```
+
+
+
+
+
+# 库的详细实现--复制
+# 库的详细实现--选举
+# 库的详细实现--Member Change
+# 库的详细实现--Snapshot
+
+先举一个简单的KV的例子，然后逐渐分析里面用到的技术点
+
+### 基础知识--Closure
+1. protobuf中的Cloure  （stubs/callback.h）
+2. 定义：
+```
+class Closure {
+public:
+  Closure() {}
+  virtual ~Closure();
+  virtual void Run() = 0;
+private:
+  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(Closure);
+};
+说明：当调用一个RPC时，必须提供一个Closure，以供RPC结束时调用
+可以通过NewCallback()函数自动的构造一个Closure，举例如下
+void FooDone(const FooResponse* response) {
+  ...
+}
+
+void CallFoo() {
+  Closure* callback = NewCallback(&FooDone, response);
+  service->Foo(controller, request, response, callback);
+}
+```
+以只有一个参数的回调函数举例，内部实现：
+```
+template <typename Arg1>
+inline Closure* NewCallback(void (*function)(Arg1), Arg1 arg1) {
+  return new internal::FuncionClosure1<Arg1>(function, true, arg1);
+}
+
+template <template Arg1>
+class FunctionClosure1 : public Closure {
+public:
+  typedef void (*FunctionType)(Arg1 arg1);
+  FunctionClosure1(FunctionType function, bool self_deleting, Arg1 arg1)
+          : function_(function), self_deleting_(self_deleting),
+          arg1_(arg1) {}
+  ~FunctionClosure1() {}
+
+  void Run() {
+    bool needs_delete = self_deleting_;
+    function_(arg1);
+    if (needs_delete) delete this;
+  }
+  private:
+    FunctionType function_;
+    bool self_deleting_;
+    Arg1 arg1_;
+}
+
+```
+在Rpc实现中done->Run()函数内部一般封装发送给调用者响应消息的功能，baidu-rpc也是如此。
+Raft实现了protobuf中的Closure,它封装了base::Status成员，用于报告libraft的内部操作是否成功
+```
+class Closure : public google::protobuf::Closure {
+public:
+  base::Status& status() {return _st;}
+  const base::Status& status() const {return _st;}
+private:
+    base::Status _st;
+```
+
+用户在使用libraft时需要继承Closure，并实现自定义的Run()函数：下面的实现判断apply()时是否成功，如果失败的话会返回给调用者错误。如果apply(）调用成功，在执行on_apply()
+回调时，由on_apply()中逻辑设置AtomicClosure中的response，并且调用Run()返回给调用方。
+```
+struct AtomicClosure : public raft::Closure {
+    void Run() {
+        if (!status().ok()) {
+            cntl->SetFailed(status().error_code(), "%s", status().error_cstr());
+        }
+        done->Run();
+        delete this;
+    }
+    baidu::rpc::Controller* cntl;
+    google::protobuf::Message* response;
+    google::protobuf::Closure* done;
+};
+```
+上面的实现中，AtomicClosure继承了raft::Closure， 如下代码所示，当_atomic->apply()调用失败时，内部框架会自动执行AtomicClosure中的done->Run()
+```
+AtomicClosure* c = new AtomicClosure;
+       c->cntl = cntl;
+       c->response = response;
+       c->done = done_guard.release();
+       return _atomic->apply(&data, c);
+```
+
+}
+虽然apply会按照提交的顺序执行，但是Closure的执行顺序与apply提交的顺序可能不同，原因是调用Closure的逻辑为开启bthread线程独立调用。
+
+#### 基础知识--

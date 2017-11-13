@@ -5,7 +5,7 @@ date: 2016-10-04
 author: "gao-xiao-long"
 catalog: false
 tags:
-    - leveldb
+    - 1.leveldb
 ---
 
 LevelDB插入一条记录时，采用WAL(write ahead logging)方式，先顺序写到磁盘日志中，然后写入Memtable。这种方式可以保证程序异常结束后数据不丢失，并且由于采用了顺序写+内存写的方式，写性能很高。
@@ -172,7 +172,3 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 Write实现上针对多线程并发写做了优化。它没有使用一个Mutex锁住整个Write函数，而是采用了**"条件变量+写队列+一个写线程代理其他写线程"方式来减小锁的粒度，提高写性能**: 每次执行写操作时，LevelDB首先将待写入的WriteBatch放到writers队列中(定义:std::deque<Writer*> writers_)然后判断队列中是否存在由其它线程放入的待写入DB的WriteBatch，如果存在的话则将此写线程设置为等待条件变量激活(这时候mutex_锁已经被释放，其他写线程可以继续往writers队列中添加任务,增加写线程的并发性),如果队列中不存在其它待写入DB的WriteBatch，表示当前此DB只有一个写线程，则不需要等待条件变量，直接往下执行。写线程被激活后(或者只有一个写线程)会先判断是否需要“**MakeRoomForWrite**"(21行，延迟写、生成新memtable、唤醒compaction等，后面文章会详细讲解), 然后将writers队列中的WriteBatch按照一定策略(1. 避免每次写入过多数据占用磁盘带宽; 2.只合并options.sync设置相同的WriteBatch)合并到一起(BuildBatchGroup())，分别写到Log及Memtable中(第31行及40行)。最后将已经写入到DB的WriteBatch状态设置为done并激活等待条件变量的线程(第55-69行)。
 
 写操作基本流程分析完毕。
-
-
-
-

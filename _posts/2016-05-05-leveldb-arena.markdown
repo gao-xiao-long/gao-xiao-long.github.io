@@ -5,7 +5,7 @@ date: 2016-5-5
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - leveldb
+    - 1.leveldb
 ---
 
 leveldb util目录中提供了通用功能的实现，比如内存管理(arena), 布隆过滤器(bloom), cache等，下面对这内存管理器Arena进行分析
@@ -89,4 +89,3 @@ BBS/Data segment/Textsegment等段不再讲述
 4.[A malloc Tutorial](http://www.inf.udec.cl/~leo/Malloc_tutorial.pdf)
 
 5.[Glibc 内存管理](http://www.valleytalk.org/wp-content/uploads/2015/02/glibc%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86ptmalloc%E6%BA%90%E4%BB%A3%E7%A0%81%E5%88%86%E6%9E%901.pdf)
-

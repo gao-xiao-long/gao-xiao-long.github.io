@@ -5,7 +5,7 @@ date: 2017-03-05
 author: "gao-xiao-long"                                                                                
 catalog: true                                                                                          
 tags:                                                                                                  
-    - leveldb                                                                                          
+    - 1.leveldb                                                                                          
 ---                                                                                                    
 
 Compaction操作是LSM的核心，所谓Compaction就是将现有的SST文件进行压缩合并，生成新SST文件过程。 Compaction操作的主要目的有两个:

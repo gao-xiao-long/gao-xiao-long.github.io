@@ -5,7 +5,7 @@ date: 2017-05-21
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - 基础技术
+    - 2.网络技术
 ---
 
 本文主要的目的是总结Linux下多线程服务器常用Reactor模式。PS：述而不作，里面很大部分知识都是总结的[陈硕](http://www.cppblog.com/Solstice) (muduo网络库作者，《Linux多线程服务端编程》作者)论述，感谢陈硕前辈。

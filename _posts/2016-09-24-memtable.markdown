@@ -5,7 +5,7 @@ date: 2016-9-24
 author: "gao-xiao-long"
 catalog: false
 tags:
-    - leveldb
+    - 1.leveldb
 ---
 
 Memtable是LevelDB中基于内存的数据结构。当应用写入(Put)一条记录的时候，应用会先将此记录追加到Log文件中，之后再插入Memtable。

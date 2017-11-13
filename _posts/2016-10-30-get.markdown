@@ -5,7 +5,7 @@ date: 2016-10-30
 author: "gao-xiao-long"
 catalog: false
 tags:
-    - leveldb
+    - 1.leveldb
 ---
 
 相对于Put操作，LevelDB在查找Key时比较复杂，会先在Memtable中查找，如果Memtable中包含要查找的Key，直接返回，否则到Immutable Memtable中读取。如果还是没有找到的话则会在一系列SSTable文件中查找，在SSTable文件中查找的原则是先从Level0文件查找，没有的话再从Level1文件，直到最高的Level中查找。
@@ -98,4 +98,3 @@ struct TableAndFile {
 这就涉及到了Block Cache， LevelDB也可以通过配置options.block_cache来加快对Block的读取。Block Cache由options.block_cache指定，默认为8MB。如果制定了block_cache, 则LevelDB会先从Block Cache中读取这个Block，如果Cache中没有找到，再从磁盘中读取Block内容并插入到Block Cache中。其中Block Cache中的Key = (SSTable文件的cache_id + 此Block在文件中的其实位置block_offset) Value则是这个Block的内容。从上面的分析中可以看出，如果读取的数据局部性较好或者顺序读取数据，则会命中Table Cache和Block Cache， 读取性能会很高。如果是随机读取，则会涉及比较多的磁盘操作，影响读取性能。
 
 至此，读取操作分析完毕。
-

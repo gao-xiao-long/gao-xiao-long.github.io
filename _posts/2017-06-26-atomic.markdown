@@ -5,7 +5,7 @@ date: 2017-06-26
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - 基础技术
+    - 3.基础技术
 ---
 
 本文主要总结并发编程中涉及到CPU和内存相关的基础知识，包括Amdahl‘s raw、Cache coherency、Memory fence、false-sharing等。
