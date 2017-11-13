@@ -5,7 +5,7 @@ date: 2017-3-11
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - 3.基础技术
+    - 基础技术
 ---
 
 本文讨论在x86_64下段错误调试的几个tips。

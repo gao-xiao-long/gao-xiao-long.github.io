@@ -5,7 +5,7 @@ date: 2017-2-26
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - 1.leveldb
+    - leveldb
 ---
 
 在LevelDB中，LSM树由一系列的SST文件组成。每一次Compaction操作后，都会生成新的SST文件，合并完成之后，合并输入文件(input files)则可以丢弃。但是有可能get或者迭代器操作还需要这些input files。所以，这些文件不能立刻删除。需要等get操作执行完成或者迭代器释放之后才可以删除。为了管理这一系列的SST文件，LevelDB引入了版本(Version)的概念。下面来探究下具体的实现。

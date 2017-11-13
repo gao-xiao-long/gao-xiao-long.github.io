@@ -5,7 +5,7 @@ date: 2016-5-5
 author: "gao-xiao-long"
 catalog: true
 tags:
-    - 1.leveldb
+    - leveldb
 ---
 
 leveldb util目录中提供了通用功能的实现，比如内存管理(arena), 布隆过滤器(bloom), cache等，下面对这内存管理器Arena进行分析

@@ -5,7 +5,7 @@ date: 2016-10-30
 author: "gao-xiao-long"
 catalog: false
 tags:
-    - 1.leveldb
+    - leveldb
 ---
 
 相对于Put操作，LevelDB在查找Key时比较复杂，会先在Memtable中查找，如果Memtable中包含要查找的Key，直接返回，否则到Immutable Memtable中读取。如果还是没有找到的话则会在一系列SSTable文件中查找，在SSTable文件中查找的原则是先从Level0文件查找，没有的话再从Level1文件，直到最高的Level中查找。
