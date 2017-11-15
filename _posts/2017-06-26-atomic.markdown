@@ -122,14 +122,12 @@ unlock(mutex)
 
 ```c++
 
-// 变量的对齐方式
-int32_t  __attribute__((aligned(64))) global_var;
+int32_t  __attribute__((aligned(64))) global_var; // 变量对齐
 
-// 类的对齐方式
 class A {
     int a1;
     short a2;
-}  __attribute__((aligned(64)));
+}  __attribute__((aligned(64)));  // 类对齐
 
 ```
 
