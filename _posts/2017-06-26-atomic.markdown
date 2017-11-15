@@ -120,6 +120,14 @@ unlock(mutex)
 1. 尽量减少全局变量的共享，在一些写多读少的场景下，可以将写操作拆分到每个独立的thread local变量中，在需要读的时候再将其合并，以减少cacheline的同步。
 2. 可以让结构体或者变量按照cacheline对齐(通过 cat /proc/cpuinfo 中的cache_alignment字段得到cacheline大小), 防止多变量在同一个cacheline中。以gcc为例，可以这样设置：
 ```c++
+// 变量的对齐方式
 int32_t  __attribute__((aligned(64))) global_var;
+
+// 类的对齐方式
+class A {
+    int a1;
+    short a2;
+}  __attribute__((aligned(64)));
+
 ```
 毕。
