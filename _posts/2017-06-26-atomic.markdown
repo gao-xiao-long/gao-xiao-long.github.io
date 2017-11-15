@@ -121,6 +121,7 @@ unlock(mutex)
 2. 可以让结构体或者变量按照cacheline对齐(通过 cat /proc/cpuinfo 中的cache_alignment字段得到cacheline大小), 防止多变量在同一个cacheline中。以gcc为例，可以这样设置：
 
 ```c++
+
 // 变量的对齐方式
 int32_t  __attribute__((aligned(64))) global_var;
 
