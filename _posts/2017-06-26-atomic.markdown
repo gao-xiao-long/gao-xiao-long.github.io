@@ -124,6 +124,7 @@ unlock(mutex)
 
 int32_t  __attribute__((aligned(64))) global_var; // 变量对齐
 
+
 class A {
     int a1;
     short a2;
