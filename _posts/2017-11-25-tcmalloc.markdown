@@ -192,11 +192,19 @@ CentralFreeList从PageHeap拿到一个Span后：
 ### 参考
 
 [1.TCMalloc 官方文档](http://goog-perftools.sourceforge.net/doc/tcmalloc.html)
+
 [2.Post-Mortem Heap Analysis: TCMalloc](https://backtrace.io/blog/memory-allocator-tcmalloc/)
+
 [3.内存分配器](http://blog.csdn.net/horkychen/article/details/35735103)
+
 [4.各种内存动态分配算法总结](http://wks.gii.upv.es/tlsf/files/ecrts04_tlsf_0.pdf)
+
 [5.jemalloc在facebook的应用](https://www.facebook.com/notes/facebook-engineering/scalable-memory-allocation-using-jemalloc/480222803919)
+
 [6.jemalloc论文](https://people.freebsd.org/~jasone/jemalloc/bsdcan2006/jemalloc.pdf)
+
 [7.TCMalloc源码分析](https://dirtysalt.github.io/html/tcmalloc.html)
+
 [8.Anatomy of a Program in Memory](http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/)
+
 [9.How the Kernel Manages Your Memory](http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/)
