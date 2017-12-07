@@ -44,11 +44,10 @@ extern "C" {
 上图展示了TCMalloc的整体结构, TCMalloc主要由三个组件组成：ThreadCache、CentralFreeList及PageHeap。
 其中：
 * ThreadCache: 线程缓存，它是一个TSL(线程本地存储)对象，尺寸小于256K的小内存申请,由ThreadCache进行分配，通过ThreadCache分配过程中不需要任何锁，可以极大的提高分配速度
-* CentralHeap: 中央堆分配器，被所有线程共享(分配时需要全局锁定)，负责与操作系统的直接交互(申请及释放内存)，并且大尺寸的内存申请直接通过CentralHeap进行分配
-* CentralFreeList：作为CentralHeap与ThreadCache的中间人，负责
-    1. 将CentralHeap中的内存切分为小块，以便ThreadCache内空间不够用时直接填充到ThreadCache
-    2. 获取从ThreadCache中释放的内存
-    3. 在恰当的时间将其缓存的内存归还给CentralHeap
+* PageHeap: 中央堆分配器，被所有线程共享(分配时需要全局锁定)，负责与操作系统的直接交互(申请及释放内存)，并且大尺寸的内存申请直接通过PageHeap进行分配
+* CentralFreeList：作为PageHeap与ThreadCache的中间人，负责
+    1. 将PageHeap中的内存切分为小块，以便ThreadCache内空间不够用时直接填充到ThreadCache
+    2. 获取从ThreadCache中回收的内存并在恰当的时间将部分缓存的内存归还给PageHeap
 
 ### 小内存分配核心思想--> Segregated Free List(离散式空闲列表)
 tcmalloc的动态内存分配核心思想就是离散式空闲列表算法,如下图所示：
@@ -89,25 +88,14 @@ ThreadCache申请与释放内存接口为：
 1. 将通过SizeMap达到对应的size class及object size大小，之后查找当前ThreadCache中相应size class 对应的free list
 2. 如果free list不为空，直接从列表中移除第一个object并返回，由于这个过程中需要获取任何锁，所以速度极快。
 3. 如果free list为空，从CentralFreeList中获取一串连续的object到对应的size class列表中(默认获取的object个数为SizeMap中定义的num_objects_to_move)，并取出其中一个object中返回。
-4. 如果CentralFreeList也为空，则CentralFreeList会向PageHeap申请一连串页面(每次申请class_to_pages个)，然后申请的页面切割成一系列的object，之后再将部分object转移给ThreadCache。
+4. 如果CentralFreeList也为空，则CentralFreeList会向PageHeap申请一连串页面(由Span表示)，每次申请class_to_pages个，然后申请的页面切割成一系列的object，之后再将部分object转移给ThreadCache。
 
-**TODO： 删除逻辑写到哪里？？什么时候分析？？**
+那么CentralFreeList的object怎么组织呢？Span又是什么呢？下面先从PageHeap入手，一一道来。
+
 
 ### 大内存分配-->PageHeap
 前面讲过，PageHeap的职能之一是向操作系统申请内存，与大多数现代分配器一样，tcmalloc使用基于页的分配方式，tcmalloc中定义的页大小为8K个字节(多数linux系统中一页大小为4K字节，也就是说tcmalloc中的一页对应linux中两页)。
-PageHeap对应的分配与销毁接口分别为：
-```c++
-// Allocate a run of "n" pages.  Returns zero if out of memory.
-// Caller should not pass "n == 0" -- instead, n should have
-// been rounded up already.
-Span* New(Length n);
 
-// Delete the span "[p, p+n-1]".
-// REQUIRES: span was returned by earlier call to New() and
-//           has not yet been deleted.
-void Delete(Span* span);
-```
-#### PageHeap管理内存基本单位--Span
 PageHeap管理内存的基本单位为Span(跨度)， 一个Span由连续的页面组成，如下图所示，分别有a，b，c，d四个Span；a占据了2个页面，b占据了1个页面，c占据了5个页面，d占据了3个页面。
 ![结构图](/img/in-post/tcmalloc/span.png)
 下面是Span的定义
@@ -127,13 +115,12 @@ struct Span {
   enum { IN_USE, ON_NORMAL_FREELIST, ON_RETURNED_FREELIST };
 };
 ```
-PS: 上述定义中的objects、refcount、sizeclass可以先不关注，后续会讲到。
 
+PS: 上述定义中的objects、refcount、sizeclass属于CentralFreeList中管理的内容，可以先不关注。
 
+**以上是Span的概念，那么，PageHeap是如何组织Span的呢？**
 
-**讲解完了Span的概念，那么，PageHeap是如何组织Span的呢？**
-
-下来看下PageHeap的主要结构及示意图：
+来看下PageHeap的主要结构及示意图：
 
 ```c++
 
@@ -176,26 +163,57 @@ tcmalloc之所以还保留returned列表，是因为虽然通过madvise归还给
 1. 将Span重新放入PageHeap的free list中(如果Span的左右邻居也是空闲的，则将它们从free list中去除，然后合并为同一个Span再挂接到free list)
 2. 检查是否需要释放内存给操作系统，如果需要，则释放。
 
+另外PageHeap还定义了PageMap pagemap_，PageMap是一个radix tree数据结构，保存的是PageID到Span对象的映射，free内存时会用到此映射。
 
-#### 小内存分配-->ThreadCache
-threadcache可以从其他thread cache中偷取？
+### 中间人-->CentralFreeList
+tcmalloc为每个size class设置设置了一个CentralFreeList(中央自由列表)，ThreadCache之间共享这些CentralFreeList
+```c++
+  static CentralFreeListPadded central_cache_[kNumClasses]; // kNumClasses个CentralFreeList
+  class CentralFreeList {
+  private:
+      SpinLock lock_;  // 每个CentralFreeList均由一个自旋锁保护
+      size_t size_class_; // 此CentralFreeList属于哪个size_class
+      Span empty_;        // empty spans list的头指针
+      Span nonempty_;     // nonempty spans list的头指针
+  };
+```
+![结构图](/img/in-post/tcmalloc/span_obj.png)
 
-#### 中间人-->CentralFreeList
+作为中间人，CentralFreeList的功能之一就是从PageHeap中取出部分Span并**按照预定大小(SizeMap中定义)**将其拆分成大小固定的object供ThreadCache使用。
+回顾下Span的定义
+```
+struct Span {
+  PageID        start;          // Starting page number
+  Length        length;         // Number of pages in span
+  Span*         next;           // Used when in link list
+  Span*         prev;           // Used when in link list
+  void*         objects;        // Linked list of free objects
+  unsigned int  refcount : 16;  // Number of non-free objects
+  unsigned int  sizeclass : 8;  // Size-class for small objects (or 0)
+  unsigned int  location : 2;   // Is the span on a freelist, and if so, which?
+  unsigned int  sample : 1;     // Sampled object?
+  // What freelist the span is on: IN_USE if on none, or normal or returned
+  enum { IN_USE, ON_NORMAL_FREELIST, ON_RETURNED_FREELIST };
+};
+```
+CentralFreeList从PageHeap拿到一个Span后
+1. 通过调用PageHeap::RegisterSizeClass(）将Span中的location填充为"IN_USE"并将sizeclass填充为制定的值
+2. 通过SizeMap获取size class对应的object大小，然后将Span切分，通过 void* objects保存为object的free list。
+3. 将Span挂接到nonempty_链表中。
+每当ThreadCache从CentralFreeList获取object时：
+1. 从nonempty_链表中获取第一个Span，并从此Span种的objects链表中获取可用object返回，每分配一个object，Span的refcount + 1。
+2. 当Span无可用object时，将此Span从nonempty_链表摘掉，挂接到empty_链表(object重新归还给此Span时会从新将其挂载到nonempty_链表)
+当ThreadCache归还object给CentralFreeList时
+1. 找到此object对应的span，挂接到objects链表表头，如果span在empty_链表，则重新挂接到nonempty_链表
+2. span的refcount--。如果refcount变成了0，表示此span所有的object都已经归还，将此Span从CentralFreeList的链表中摘掉，并将其退还给PageHeap。(pageheap->Delete(span))
 
-#### 其他： 元数据管理--PageHeapAllocator，为啥object不需要额外的控制结构。
-
-### 实现细节
-#### 全局内存分配TCMalloc_SystemAlloc
-#### 元数据内存分配PageHeapAllocator
-#### ThreadCache组织结构（双向链表）
-
-
-在PageHeap里面，还有一个PageHeapAllocator，专门用于分配各种控制结构的内存，比如span、ThreadCache、等。可见，在tcmalloc里面控制结构与object是分离的。而object自身并不需要额外的控制结构，当它被分配时，它的所有内存空间都服务于使用者；而当它空闲时，它的第一个8Byte空间被当作链表指针，链在各种freelist里面。
-
+参考
+[TCMalloc 官方文档](http://goog-perftools.sourceforge.net/doc/tcmalloc.html)
+[Post-Mortem Heap Analysis: TCMalloc](https://backtrace.io/blog/memory-allocator-tcmalloc/)
+[内存分配器]http://blog.csdn.net/horkychen/article/details/35735103
+[各种内存动态分配算法总结](http://wks.gii.upv.es/tlsf/files/ecrts04_tlsf_0.pdf)
 [jemalloc在facebook的应用]https://www.facebook.com/notes/facebook-engineering/scalable-memory-allocation-using-jemalloc/480222803919
 [jemalloc论文](https://people.freebsd.org/~jasone/jemalloc/bsdcan2006/jemalloc.pdf)
 [tcmalloc源码分析](https://dirtysalt.github.io/html/tcmalloc.html)
-[A Memory Allocator]http://gee.cs.oswego.edu/dl/html/malloc.html
-http://blog.csdn.net/horkychen/article/details/35735103
-[各种内存动态分配算法总结](http://wks.gii.upv.es/tlsf/files/ecrts04_tlsf_0.pdf)
-http://www.cs.cmu.edu/afs/cs/academic/class/15213-s11/www/lectures/20-allocation-advanced.pdf
+[Anatomy of a Program in Memory](http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/)
+[How the Kernel Manages Your Memory](http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/)
