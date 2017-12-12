@@ -8,7 +8,7 @@ tags:
   - tcmalloc
 ---
 
-本文偏重于剖析tcmalloc的整体结构(基于gperftools-2.1)，为了不过于繁琐，会忽略很多内部实现细节。
+本文偏重于剖析tcmalloc的整体结构(基于gperftools-2.1)，为了不过于繁琐，不过多涉及内部实现细节。
 
 ### 介绍
 tcmalloc是google开发的一个专门为高并发场景优化的内存分配器，全称为"thread cache malloc"。按照[官网](http://goog-perftools.sourceforge.net/doc/tcmalloc.html)的介绍，tcmalloc相比于glibc2.3的malloc(底层实现为ptmalloc2)主要有以下优点：
@@ -75,7 +75,7 @@ private:
 
 class ThreadCache {
 private:
-     FreeList      list_[kNumClasses];     // Array indexed by size-class
+     FreeList      list_[kNumClasses];    
 };
 ```
 
@@ -164,10 +164,10 @@ tcmalloc为每个size class设置设置了一个CentralFreeList(中央自由列�
   static CentralFreeListPadded central_cache_[kNumClasses];
   class CentralFreeList {
   private:
-      SpinLock lock_;  // 每个CentralFreeList均由一个自旋锁保护
-      size_t size_class_; // 此CentralFreeList属于哪个size_class
-      Span empty_;        // empty spans list的头指针
-      Span nonempty_;     // nonempty spans list的头指针
+      SpinLock lock_;
+      size_t size_class_;
+      Span empty_;       
+      Span nonempty_;
   };
 ```
 
