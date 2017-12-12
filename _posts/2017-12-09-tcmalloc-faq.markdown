@@ -36,17 +36,12 @@ void PageHeap::IncrementalScavenge(Length n) {
     return;
   }
 
-  // 每次归还1个Span, released_pages代表本次归还的page数目
   Length released_pages = ReleaseAtLeastNPages(1);
 
-  // 如果没有可归还的Span，下次Span归还2GB后再启动回收（2G = kDefaultReleaseDelay*8K/1024/1024）
   if (released_pages == 0) {
     // kDefaultReleaseDelay = 1 << 18
     scavenge_counter_ = kDefaultReleaseDelay;
   } else {
-    // Compute how long to wait until we return memory.
-    // FLAGS_tcmalloc_release_rate==1 means wait for 1000 pages
-    // after releasing one page.
     const double mult = 1000.0 / rate;
     double wait = mult * static_cast<double>(released_pages);
     if (wait > kMaxReleaseDelay) {
@@ -90,7 +85,7 @@ void PageHeap::IncrementalScavenge(Length n) {
 void *p0, *p1, *p2, *p3;
 p0 = malloc(8);                                                                                    
 free(p0);                                                                                          
-free(p0);   // p0 free了两次                                                                                          
+free(p0);                                                                                          
 p1 = malloc(8);                                                                                    
 p2 = malloc(8);                                                                                    
 p3 = malloc(8);  
