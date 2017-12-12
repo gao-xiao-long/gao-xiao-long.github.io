@@ -8,7 +8,7 @@ tags:
   - tcmalloc
 ---
 
-本文偏重于剖析tcmalloc的整体结构，不会过多提及内部实现细节。
+本文偏重于剖析tcmalloc的整体结构(基于gperftools-2.1)，为了不过于繁琐，会忽略很多内部实现细节。
 
 ### 介绍
 tcmalloc是google开发的一个专门为高并发场景优化的内存分配器，全称为"thread cache malloc"。按照[官网](http://goog-perftools.sourceforge.net/doc/tcmalloc.html)的介绍，tcmalloc相比于glibc2.3的malloc(底层实现为ptmalloc2)主要有以下优点：
@@ -143,7 +143,7 @@ SpanList free_[kMaxPages]; // kMaxPages = 128
 3. Span列表又分为了normal和returned两个部分，其中:
   * normal部分包含的Span，是页面明确映射到进程地址空间的Span。
   * returned部分包含的Span，是tcmalloc已经通过madvise归还给操作系统空间，调用madvise相当于取消了虚拟内存与物理内存的映射。
-tcmalloc之所以还保留returned列表，是因为虽然通过madvise归还给了操作系统，但是操作系统有可能还没有收回这部分内存空间，可以直接利用，如果在操作系统回收前tcmalloc重新使用了这些页面，那么系统就不会再进行回收。并且，即使操作系统已经回收了这部分内存，重新使用这部分空间时内核会将其映射到一块全零的内存空间，不影响使用（代价是会影响性能）。
+tcmalloc之所以还保留returned列表，是因为虽然通过madvise归还给了操作系统，但是操作系统有可能还没有收回这部分内存空间，可以直接利用，如果在操作系统回收前tcmalloc重新使用了这些页面，那么系统就不会再进行回收。并且，即使操作系统已经回收了这部分内存，重新使用这部分空间时内核会引发page fault并将其映射到一块全零的内存空间，不影响使用（代价是会影响性能）。
 
 当调用Span* New(Length n) 分配内存时（n代表的是需要分配的页面数目）：
 
