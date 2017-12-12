@@ -1,6 +1,6 @@
 ---
 layout: post
-title: tcmalloc常见问题问答
+title: tcmalloc相关问题答疑
 date: 2017-11-25
 author: "gao-xiao-long"
 catalog: true
@@ -8,31 +8,28 @@ tags:
   - tcmalloc
 ---
 
-在[tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)中剖析了tcmalloc整体结构，下面就一些常见的疑问进行分析。
+在[tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)中介绍了tcmalloc整体结构，下面就一些常见的疑问进行分析。
 
-#### 问题一：tcmalloc内存归还给操作系统的时机
-PageHeap负责向操作系统申请及归还内存，对应的函数为PageHeap::ReleaseAtLeastNPages(Length num_pages), 调用该函数归还内存时以round-robin的方式每次从不同的Span list（free_或者large_）中
-取出最后一个Span，并将其所代表的内存空间归还给操作系统（此Span同时加入了returned列表），直到归还page数目大于等于达num_page个或者PageHeap中没有可释放的Span(stats_.free_bytes = 0)。
-**需要注意：**
-* 由于ReleaseAtLeastNPages(Length num_pages)采用的round-robin的方式，按照Span维度进行回收，所以释放内存数目可能比num_pages大，比如，假设轮训到了free_[128],则一次会释放128个page(span length = 128)。
-* ReleaseAtLeastNPages只会回收PageHeap中的Span。处于CentralFreeList中的Span不受影响，ThreadCache中缓存的object也不受影响。
+#### 疑问一：tcmalloc内存归还给操作系统的时机
+PageHeap负责向操作系统申请及归还内存，对应的函数为PageHeap::ReleaseAtLeastNPages(num_pages), 调用该函数归还内存时以round-robin的方式每次从不同的span list中
+取出最后一个span，并将其所代表的内存空间归还给操作系统（此span同时加入了returned列表），直到归还page数目大于等于达num_page个或者PageHeap中没有可释放的span为止。需要注意两点：
+* 1.由于ReleaseAtLeastNPages(Length num_pages)回收内存采用的是按round-robin的方式，以span维度进行回收，所以释放内存数目可能比num_pages大，比如，假设此次回收轮询到了free_[128],则一次会释放128个page(span length = 128)。
+* ReleaseAtLeastNPages只会回收PageHeap中的span。处于CentralFreeList中的span不受影响，ThreadCache中缓存的object也不受影响。
 
-tcmalloc归还内存时机(即调用ReleaseAtLeastNPages的时机)分别为手动全量归还及自动增量归还及特殊情况下归还，下面分别看下三种方式。
+tcmalloc主要通过“手动全量归还”及“自动增量归还”还有"特殊情况下归还“三种方式将内存归还给操作系统。
 ##### 1.手动全量归还
-手动全量归还指的是应用程序主动调用MallocExtension::instance()->ReleaseFreeMemory()将内存归还给操作系统，此调用传递给ReleaseAtLeastNPages中的num_pages数为static_cast<size_t>(-1)，即SIZE_T_MAX。也就是说它会将PageHeap中所有处于free list中的Span**全部回收**。**需要注意：** ReleaseFreeMemory()在调用期间会锁住整个PageHeap，直到归还完成，所以线上需谨慎使用。
+手动全量归还指的是应用程序主动调用MallocExtension::instance()->ReleaseFreeMemory()将内存归还给操作系统，此调用传递给ReleaseAtLeastNPages中的num_pages数为static_cast<size_t>(-1)，即SIZE_T_MAX。也就是说它会将PageHeap中所有处于free list中的span全部回收。 ReleaseFreeMemory()在调用期间会锁住整个PageHeap，直到归还完成，所以线上需谨慎使用。
 ##### 2.自动增量归还
-即tcmalloc定期增量的归还部分内存给操作系统。归还时机取决于PageHeap的scavenge_counter_， 每次Span返还给PageHeap时(可能是从CentralFreeList返还，也可能是大内存分配直接返还，或者是大Span切分时返还，总之是调用Delete(Span)时)，PageHeap的scavenge_counter_都会减去span->length。当scavenge_counter_降为0时，通过调用ReleaseAtLeastNPages(1)回收1个Span。
-scavenge_counter_的值计算公式如下：
+即tcmalloc定期增量的归还部分内存给操作系统。归还时机取决于PageHeap的scavenge_counter_；每次Span返还给PageHeap时(可能是从CentralFreeList返还，也可能是大内存分配直接返还，或者是大Span切分时返还，总之是调用Delete(Span)时)，PageHeap的scavenge_counter_都会减去span->length。当scavenge_counter_降为0时，通过调用ReleaseAtLeastNPages(1)回收1个Span。
+scavenge_counter_的值计算细节如下：
 
 ```c++
 void PageHeap::IncrementalScavenge(Length n) {
   // Fast path; not yet time to release memory
   scavenge_counter_ -= n;
-  if (scavenge_counter_ >= 0) return;  // Not yet time to scavenge
+  if (scavenge_counter_ >= 0) return;  
 
-  // 归还速度
   const double rate = FLAGS_tcmalloc_release_rate;
-  // FLAGS_tcmalloc_release_rate = 0.0 tcmalloc不会主动归还内存
   if (rate <= 1e-6) {
     // Tiny release rate means that releasing is disabled.
     scavenge_counter_ = kDefaultReleaseDelay;
@@ -59,6 +56,7 @@ void PageHeap::IncrementalScavenge(Length n) {
     scavenge_counter_ = static_cast<int64_t>(wait);
   }
 }
+
 ```
 
 通过上面公式可以得到：
@@ -70,13 +68,15 @@ void PageHeap::IncrementalScavenge(Length n) {
 
 ##### 3.特殊情况下归还
 特殊情况下归还包括:
-1. tcmalloc占用的内存达到了FLAGS_tcmalloc_heap_limit_mb限制，超过此阈值后，tcmalloc会释放超出的部分
-2. PageHeap中碎片过多(即free list中的Span大量分散，没法满足申请需求), 这时候tcmalloc会将normal中的所有Span释放到returned，此过程Span会最大程度上进行合并。
+* tcmalloc占用的内存达到了FLAGS_tcmalloc_heap_limit_mb限制，超过此阈值后，tcmalloc会释放超出的部分
+* PageHeap中碎片过多(即free list中的Span大量分散，没法满足申请需求), 这时候tcmalloc会将normal中的所有Span释放到returned，此过程Span会最大程度上进行合并。
+由于此种归还方式使用的比较少，不再详细展开。
 
-#### 问题二： 使用tcmalloc作为默认内存分配器时double-free及invalid-free情况下系统有何表现
-先说结论：系统会出现未定义的行为(某一时间crash掉？或数据出现混乱？其他诡异的错误？等等)
-
-为了方便探讨问题，这里只讨论“小内存”分配情况。对于小内存分配，free(void* ptr)的大概流程是：先将ptr转化为PageID，再根据PageID找出对应的size class; 最后将ptr挂接到size class对应的free_list的头部，下面以结构图的方式说明了free_list的组织：
+#### 问题二： double-free及invalid-free情况下系统有何表现
+**先说结论：**系统会出现未定义的行为(某一时间crash掉？或数据出现混乱？其他诡异的错误？等等)
+为了方便探讨问题，这里只讨论“小内存”分配情况。对于小内存分配，free(void* ptr)的大概流程是：
+> 先将ptr转化为PageID，再根据PageID找出对应的size class; 最后将ptr挂接到size class对应的free_list的头部。
+下面以结构图的方式说明了free_list的组织：
 假设某个thread cache其中的一个free list如下：
 ![结构图](/img/in-post/tcmalloc/free_list1.png)
 某一时刻将ptr对应的内存空间free后(假设ptr指向的地址为：0xeea020),对应的free list变为如下形式:
@@ -136,6 +136,7 @@ p2=0xee6022
 
 
 
-参考：
-[tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)
-[Post-Mortem Heap Analysis: TCMalloc](https://backtrace.io/blog/memory-allocator-tcmalloc/)
+#### 参考：
+[1. tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)
+
+[2. Post-Mortem Heap Analysis: TCMalloc](https://backtrace.io/blog/memory-allocator-tcmalloc/)
