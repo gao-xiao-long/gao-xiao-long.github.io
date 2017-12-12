@@ -70,12 +70,13 @@ void PageHeap::IncrementalScavenge(Length n) {
 特殊情况下归还包括:
 * tcmalloc占用的内存达到了FLAGS_tcmalloc_heap_limit_mb限制，超过此阈值后，tcmalloc会释放超出的部分
 * PageHeap中碎片过多(即free list中的Span大量分散，没法满足申请需求), 这时候tcmalloc会将normal中的所有Span释放到returned，此过程Span会最大程度上进行合并。
-由于此种归还方式使用的比较少，不再详细展开。
+
 
 #### 问题二： double-free及invalid-free情况下系统有何表现
 **先说结论：**系统会出现未定义的行为(某一时间crash掉？或数据出现混乱？其他诡异的错误？等等)
 为了方便探讨问题，这里只讨论“小内存”分配情况。对于小内存分配，free(void* ptr)的大概流程是：
 > 先将ptr转化为PageID，再根据PageID找出对应的size class; 最后将ptr挂接到size class对应的free_list的头部。
+
 下面以结构图的方式说明了free_list的组织：
 假设某个thread cache其中的一个free list如下：
 ![结构图](/img/in-post/tcmalloc/free_list1.png)
@@ -133,8 +134,6 @@ p2=0xee6022
 
 从上述的double-free及invalid-free后果，系统很有可能在当时表现正常，而运行到一段时间后crash在不相关的地方。如果出现这种情况，应该去掉tcmalloc，使用系统默认的malloc()及free()函数。系统默认的函数在double-free及invalid-free后会立即crash。
 另外，可以使用Address Sanitizer工具来识别double-free、invalid-free等case。具体的使用方法参见[段错误调试几个tips](http://gao-xiao-long.github.io/2017/03/11/call-stack/)
-
-
 
 #### 参考：
 [1. tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)
