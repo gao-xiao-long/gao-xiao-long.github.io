@@ -69,8 +69,8 @@ tcmalloc实现中，每个thread独立维护了各自的离散式空闲列表，
 ```c++
 class FreeList {
 private:
- void*    list_;       // Linked list of nodes
- uint32_t length_;      // Current length.
+ void*    list_;
+ uint32_t length_;
 };
 
 class ThreadCache {

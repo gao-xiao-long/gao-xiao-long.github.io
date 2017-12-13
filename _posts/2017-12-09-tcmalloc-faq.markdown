@@ -42,7 +42,6 @@ void PageHeap::IncrementalScavenge(Length n) {
     const double mult = 1000.0 / rate;
     double wait = mult * static_cast<double>(released_pages);
     if (wait > kMaxReleaseDelay) {
-      // Avoid overflow and bound to reasonable range.
       wait = kMaxReleaseDelay;
     }
     scavenge_counter_ = static_cast<int64_t>(wait);
