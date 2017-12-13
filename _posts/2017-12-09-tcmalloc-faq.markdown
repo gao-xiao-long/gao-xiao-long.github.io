@@ -10,7 +10,7 @@ tags:
 
 在[tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)中介绍了tcmalloc整体结构，下面就一些常见的疑问进行分析。
 
-#### 疑问一：tcmalloc内存归还给操作系统的时机
+#### 问题一：tcmalloc内存归还给操作系统的时机
 PageHeap负责向操作系统申请及归还内存，对应的函数为PageHeap::ReleaseAtLeastNPages(num_pages), 调用该函数归还内存时以round-robin的方式每次从不同的span list中
 取出一个span，并将其所代表的内存空间归还给操作系统（此span同时加入了returned列表），直到归还page数目大于等于达num_pages或者PageHeap中没有可释放的span为止。需要注意两点：
 * 1.由于ReleaseAtLeastNPages(Length num_pages)归还内存采用的是按round-robin的方式，以span维度进行回收，所以归还大小可能比num_pages大，比如，假设此次回收轮询到了free_[128],则一次会归还128个page(span length = 128)。
@@ -126,7 +126,7 @@ p2=0xee6022
 从上述的double-free及invalid-free的行为看，系统很有可能在当时表现正常，而运行到一段时间后crash在不相关的地方。如果出现这种情况，应该去掉tcmalloc，使用系统默认的malloc()及free()函数，系统默认的函数在double-free及invalid-free后会立即crash。另外，可以使用Address Sanitizer工具来识别double-free、invalid-free等case。具体的使用方法参见[段错误调试几个tips](http://gao-xiao-long.github.io/2017/03/11/call-stack/)
 
 
-#### 使用new()及malloc()进行内存分配的区别
+#### 问题三：new()及malloc()内存分配的差别
 从纯内存分配角度，没有任何差别，都是按相同的逻辑从ThreadCache或者PageHeap进行申请。主要的差别在语法上：
 1. 调用new()后会自动调用构造函数，delete()会自动调用析构函数，而malloc()及free()不会，所以调用malloc()一定要初始化数据，否则内存区域将会填充不确定的值，或者用calloc()替代，calloc()会把申请的内存区域初始化为0)。
 2. 使用new()在分配失败时可以回调指定函数(std_new_handler)，malloc()不可以
