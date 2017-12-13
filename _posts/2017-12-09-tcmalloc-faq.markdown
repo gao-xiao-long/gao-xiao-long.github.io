@@ -125,6 +125,14 @@ p2=0xee6022
 
 从上述的double-free及invalid-free的行为看，系统很有可能在当时表现正常，而运行到一段时间后crash在不相关的地方。如果出现这种情况，应该去掉tcmalloc，使用系统默认的malloc()及free()函数，系统默认的函数在double-free及invalid-free后会立即crash。另外，可以使用Address Sanitizer工具来识别double-free、invalid-free等case。具体的使用方法参见[段错误调试几个tips](http://gao-xiao-long.github.io/2017/03/11/call-stack/)
 
+
+#### 使用new()及malloc()进行内存分配的区别
+从纯内存分配角度，没有任何差别，都是按相同的逻辑从ThreadCache或者PageHeap进行申请。主要的差别在语法上：
+1. 调用new()后会自动调用构造函数，delete()会自动调用析构函数，而malloc()及free()不会，所以调用malloc()一定要初始化数据，否则内存区域将会填充不确定的值，或者用calloc()替代，calloc()会把申请的内存区域初始化为0)。
+2. 使用new()在分配失败时可以回调指定函数(std_new_handler)，malloc()不可以
+3. 是否可以抛出异常等其他语法差别
+
+
 #### 参考：
 [1. tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)
 
