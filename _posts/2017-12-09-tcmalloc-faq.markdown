@@ -12,9 +12,9 @@ tags:
 
 #### 疑问一：tcmalloc内存归还给操作系统的时机
 PageHeap负责向操作系统申请及归还内存，对应的函数为PageHeap::ReleaseAtLeastNPages(num_pages), 调用该函数归还内存时以round-robin的方式每次从不同的span list中
-取出最后一个span，并将其所代表的内存空间归还给操作系统（此span同时加入了returned列表），直到归还page数目大于等于达num_page个或者PageHeap中没有可释放的span为止。需要注意两点：
-* 1.由于ReleaseAtLeastNPages(Length num_pages)回收内存采用的是按round-robin的方式，以span维度进行回收，所以释放内存数目可能比num_pages大，比如，假设此次回收轮询到了free_[128],则一次会释放128个page(span length = 128)。
-* ReleaseAtLeastNPages只会回收PageHeap中的span。处于CentralFreeList中的span不受影响，ThreadCache中缓存的object也不受影响。
+取出一个span，并将其所代表的内存空间归还给操作系统（此span同时加入了returned列表），直到归还page数目大于等于达num_pages或者PageHeap中没有可释放的span为止。需要注意两点：
+* 1.由于ReleaseAtLeastNPages(Length num_pages)归还内存采用的是按round-robin的方式，以span维度进行回收，所以归还大小可能比num_pages大，比如，假设此次回收轮询到了free_[128],则一次会归还128个page(span length = 128)。
+* ReleaseAtLeastNPages只会归还PageHeap中的span。处于CentralFreeList中的span不受影响，ThreadCache中缓存的object也不受影响。
 
 tcmalloc主要通过“手动全量归还”及“自动增量归还”还有"特殊情况下归还“三种方式将内存归还给操作系统。
 ##### 1.手动全量归还
@@ -25,13 +25,11 @@ scavenge_counter_的值计算细节如下：
 
 ```c++
 void PageHeap::IncrementalScavenge(Length n) {
-  // Fast path; not yet time to release memory
   scavenge_counter_ -= n;
   if (scavenge_counter_ >= 0) return;  
 
   const double rate = FLAGS_tcmalloc_release_rate;
   if (rate <= 1e-6) {
-    // Tiny release rate means that releasing is disabled.
     scavenge_counter_ = kDefaultReleaseDelay;
     return;
   }
@@ -39,7 +37,6 @@ void PageHeap::IncrementalScavenge(Length n) {
   Length released_pages = ReleaseAtLeastNPages(1);
 
   if (released_pages == 0) {
-    // kDefaultReleaseDelay = 1 << 18
     scavenge_counter_ = kDefaultReleaseDelay;
   } else {
     const double mult = 1000.0 / rate;
@@ -56,14 +53,14 @@ void PageHeap::IncrementalScavenge(Length n) {
 
 通过上面公式可以得到：
 1. FLAGS_tcmalloc_release_rate可以控制tcmalloc增量归还速度， 如果FLAGS_tcmalloc_release_rate = 0.0，那么tcmalloc不会主动增量归还内存
-2. 如果本次通过ReleaseAtLeastNPages(1)调用发现没有可归还的Span，那么下次归还时机为2GB大小的Span归还给PageHeap后(scavenge_counter_ = kDefaultReleaseDelay)
-3. 一般情况下，回收速度的计算公式为：min(kMaxReleaseDelay, (1000.0 / FLAGS_tcmalloc_release_rate) * released_pages)
+2. 一般情况下，回收速度的计算公式为：min(kMaxReleaseDelay, (1000.0 / FLAGS_tcmalloc_release_rate) * released_pages)
+3. 如果本次通过ReleaseAtLeastNPages(1)调用发现没有可归还的Span，那么下次归还时机为2GB大小的Span归还给PageHeap后(scavenge_counter_ = kDefaultReleaseDelay)
 4. 如果FLAGS_tcmalloc_release_rate = 1.0, 且上次回收了1页大小，则下次回收时间是大约8M大小(1000个page)的Span归还到PageHeap后
 5. 如果想要加快tcmalloc归还内存的速度，将FLAGS_tcmalloc_release_rate设置的大些即可，tcmalloc官方推荐的值为[1.0, 10.0]
 
 ##### 3.特殊情况下归还
 特殊情况下归还包括:
-* tcmalloc占用的内存达到了FLAGS_tcmalloc_heap_limit_mb限制，超过此阈值后，tcmalloc会释放超出的部分
+* tcmalloc占用的内存达到了FLAGS_tcmalloc_heap_limit_mb限制，超过此阈值后，tcmalloc会释放超出的部分。
 * PageHeap中碎片过多(即free list中的Span大量分散，没法满足申请需求), 这时候tcmalloc会将normal中的所有Span释放到returned，此过程Span会最大程度上进行合并。
 
 
@@ -127,8 +124,7 @@ p2=0xee6022
 ```
 上面的例子中，传递给free()函数的地址不是0xee6020，而是它之后的两个字节，即0xee6022。这时候tcmalloc不会崩溃或返回失败，相反，它会将无效的空闲指针推送到thread cache的free list中，并在下一次内存请求时将其弹出，因此p2得到的地址是没有正确对齐的无效地址，且超过了它的边界2个字节。
 
-从上述的double-free及invalid-free后果，系统很有可能在当时表现正常，而运行到一段时间后crash在不相关的地方。如果出现这种情况，应该去掉tcmalloc，使用系统默认的malloc()及free()函数。系统默认的函数在double-free及invalid-free后会立即crash。
-另外，可以使用Address Sanitizer工具来识别double-free、invalid-free等case。具体的使用方法参见[段错误调试几个tips](http://gao-xiao-long.github.io/2017/03/11/call-stack/)
+从上述的double-free及invalid-free的行为看，系统很有可能在当时表现正常，而运行到一段时间后crash在不相关的地方。如果出现这种情况，应该去掉tcmalloc，使用系统默认的malloc()及free()函数，系统默认的函数在double-free及invalid-free后会立即crash。另外，可以使用Address Sanitizer工具来识别double-free、invalid-free等case。具体的使用方法参见[段错误调试几个tips](http://gao-xiao-long.github.io/2017/03/11/call-stack/)
 
 #### 参考：
 [1. tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)
