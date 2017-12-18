@@ -10,7 +10,7 @@ tags:
 
 在[tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)中介绍了tcmalloc整体结构，下面就一些常见的疑问进行分析。
 
-#### 问题一：tcmalloc内存归还给操作系统的时机
+#### 问题一：PageHeap内存归还给操作系统的时机
 PageHeap负责向操作系统申请及归还内存，对应的函数为PageHeap::ReleaseAtLeastNPages(num_pages), 调用该函数归还内存时以round-robin的方式每次从不同的span list中
 取出一个span，并将其所代表的内存空间归还给操作系统（此span同时加入了returned列表），直到归还page数目大于等于达num_pages或者PageHeap中没有可释放的span为止。需要注意两点：
 * 1.由于ReleaseAtLeastNPages(Length num_pages)归还内存采用的是按round-robin的方式，以span维度进行回收，所以归还大小可能比num_pages大，比如，假设此次回收轮询到了free_[128],则一次会归还128个page(span length = 128)。
@@ -62,8 +62,20 @@ void PageHeap::IncrementalScavenge(Length n) {
 * tcmalloc占用的内存达到了FLAGS_tcmalloc_heap_limit_mb限制，超过此阈值后，tcmalloc会释放超出的部分。
 * PageHeap中碎片过多(即free list中的Span大量分散，没法满足申请需求), 这时候tcmalloc会将normal中的所有Span释放到returned，此过程Span会最大程度上进行合并。
 
+#### 问题二： ThreadCache内存回收时机
+ThreadCache不会直接将内存归还给PageHeap，而是将多余内存归还给CentralFreeList；当ThreadCache归还内存时，CentralFreeList会判断待归还的内存对应的Span中是否所有的object都已经归还，如果均已归还，CentralFreeList会将此Span整体归还给PageHeap。
+那么ThreadCache何时将内存归还给CentralFreelist呢？主要分两种情况：一种是某个size class的free list长度超过限额，另一种是某个thread cache的总容量超过限额；下面展开来看下。
 
-#### 问题二： double-free及invalid-free情况下系统有何表现
+##### free list超过限额
+tcmalloc为ThreadCache中的每个size class的free list都设置了独立的max_length，代表当前free list允许的最大长度，当free list当前的大小超过max_length后，ThreadCache会回收min(max_length, num_objects_to_move)个objects到CentralFreeList
+PS: ThreadCache中size class的free list大小非常重要，如果free list太小，需要经常访问CentralFreeList影响性能；如果free list太大，又会造成空间浪费。并且由于线程还存在非对称性的alloc/free行为(比如生产者与消费者线程；消费者线程只负责free，基本上不需要有free list)，所以设置free list为合适的大小比较棘手。为了更合理的设置free list大小，tcmalloc采取了“慢启动”算法：刚开始max_length设置为1，随着free list更频繁的使用，其最大长度也会跟着增长。
+
+##### thread cache的容量超过限额
+tcmalloc为每个ThreadCache设置了一个初始的的大小：max_size(64K)，并规定了所有线程占用的总空间不能超过TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES(默认为32M)。当一个线程的ThreadCache大小超过max_size之后，tcmalloc就会遍历此ThreadCache中所有空闲列表，将空闲列表中的一些对象回收到CentralFreeList(回收的大小根据每个free list的最低水位标记确定，每次回收最低水位的1/2)。在回收完之后，tcmalloc会检查是否还有还有可用配额，如果有，则增加此ThreadCache的max_size值，如果没有，则通过轮训的方式向其他线程”偷取”部分配额(每次偷取或增加64K，具体细节见ThreadCache::IncreaseCacheLimitLocked)。通过这种方式，对缓存需求大的线程会得到更大的配额。
+
+PS：对于使用多个线程的应用程序，TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES的默认值可能不够，如果怀疑应用程序由于TCMalloc中的锁争用而无法扩展到多线程，可以尝试增加此值。
+
+#### 问题三： double-free及invalid-free情况下系统有何表现
 **先说结论：**系统会出现未定义的行为(某一时间crash掉？或数据出现混乱？其他诡异的错误？等等)
 为了方便探讨问题，这里只讨论“小内存”分配情况。对于小内存分配，free(void* ptr)的大概流程是：
 > 先将ptr转化为PageID，再根据PageID找出对应的size class; 最后将ptr挂接到size class对应的free_list的头部。
@@ -126,7 +138,7 @@ p2=0xee6022
 从上述的double-free及invalid-free的行为看，系统很有可能在当时表现正常，而运行到一段时间后crash在不相关的地方。如果出现这种情况，应该去掉tcmalloc，使用系统默认的malloc()及free()函数，系统默认的函数在double-free及invalid-free后会立即crash。另外，可以使用Address Sanitizer工具来识别double-free、invalid-free等case。具体的使用方法参见[段错误调试几个tips](http://gao-xiao-long.github.io/2017/03/11/call-stack/)
 
 
-#### 问题三：new()及malloc()内存分配的差别
+#### 问题四：new()及malloc()内存分配的差别
 从纯内存分配角度，没有任何差别，都是按相同的逻辑从ThreadCache或者PageHeap进行申请。主要的差别在语法上：
 1. 调用new()后会自动调用构造函数，delete()会自动调用析构函数，而malloc()及free()不会，所以调用malloc()一定要初始化数据，否则内存区域将会填充不确定的值，或者用calloc()替代，calloc()会把申请的内存区域初始化为0)。
 2. 使用new()在分配失败时可以回调指定函数(std_new_handler)，malloc()不可以
