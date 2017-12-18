@@ -69,7 +69,7 @@ ThreadCache不会直接将内存归还给PageHeap，而是将多余内存归还�
 ##### free list超过限额
 tcmalloc为ThreadCache中的每个size class的free list都设置了独立的max_length，代表当前free list允许的最大长度，当free list当前的大小超过max_length后，ThreadCache会回收min(max_length, num_objects_to_move)个objects到CentralFreeList
 
-PS: ThreadCache中size class的free list大小非常重要，如果free list太小，需要经常访问CentralFreeList影响性能；如果free list太大，又会造成空间浪费。并且由于线程还存在非对称性的alloc/free行为(比如生产者与消费者线程；消费者线程只负责free，基本上不需要有free list)，所以设置free list为合适的大小比较棘手。为了更合理的设置free list大小，tcmalloc采取了“慢启动”算法：刚开始max_length设置为1，随着free list更频繁的使用，其最大长度也会跟着增长。
+PS: ThreadCache中size class的free list大小非常重要，如果free list太小，需要经常访问CentralFreeList影响性能；如果free list太大，又会造成空间浪费。并且由于线程还存在非对称性的alloc/free行为(比如生产者与消费者线程；消费者线程只负责free，基本上不需要有free list)，所以设置free list为合适的大小比较棘手。为了更合理的设置free list大小，tcmalloc采取了“慢启动”算法：刚开始max_length设置为1，随着free list更频繁的使用，其最大长度也会跟着增长(细节略)。
 
 ##### thread cache的容量超过限额
 tcmalloc为每个ThreadCache设置了一个初始的的大小：max_size(64K)，并规定了所有线程占用的总空间不能超过TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES(默认为32M)。当一个线程的ThreadCache大小超过max_size之后，tcmalloc就会遍历此ThreadCache中所有空闲列表，将空闲列表中的一些对象回收到CentralFreeList(回收的大小根据每个free list的最低水位标记确定，每次回收最低水位的1/2)。在回收完之后，tcmalloc会检查是否还有还有可用配额，如果有，则增加此ThreadCache的max_size值，如果没有，则通过轮训的方式向其他线程”偷取”部分配额(每次偷取或增加64K，具体细节见ThreadCache::IncreaseCacheLimitLocked)。通过这种方式，对缓存需求大的线程会得到更大的配额。
