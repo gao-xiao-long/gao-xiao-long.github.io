@@ -146,15 +146,15 @@ p2=0xee6022
 3. 是否可以抛出异常等其他语法差别
 
 #### 问题四：如何将STL默认的内存分配器改为tcmalloc
-只需要链接tcmalloc！其它什么都不需要做。
+只需要链接tcmalloc，其它什么都不需要做！
 
 为了提高内存分配的速度，STL在默认情况下申请内存时不会直接调用new()和delete()，而是维护了一个内存池，对于已经销毁的对象，STL会将其缓存到内存池中，以供下次使用。
-为了禁用STL的内存池，在源代码中定义了如下两个环境变量：
+为了禁用STL的内存池，tcmalloc在源代码中定义了如下两个环境变量：
 ```c++
 setenv("GLIBCPP_FORCE_NEW", "1", false /* no overwrite*/);
 setenv("GLIBCXX_FORCE_NEW", "1", false /* no overwrite*/);
 ```
-这两个环境变量为gcc3.2.2之后定义的，它们会强制STL默认分配器调用new()及delete()来进行分配或者释放操作，而tcmalloc又重新定义了new()及delete()的实现，所以STL默认的内存分配器就改为了tcmalloc。
+这两个环境变量为gcc3.2.2之后定义的，会强制STL默认分配器调用new()及delete()来进行分配或者释放操作，而tcmalloc又重新定义了new()及delete()的实现，所以STL默认的内存分配器就变成了tcmalloc。
 使用tcmalloc作为默认分配器会比STL内存池方式更加的快速(尤其是小内存的分配)。
 
 
@@ -163,4 +163,4 @@ setenv("GLIBCXX_FORCE_NEW", "1", false /* no overwrite*/);
 
 [2. Post-Mortem Heap Analysis: TCMalloc](https://backtrace.io/blog/memory-allocator-tcmalloc/)
 
-[3.valgrind中的问题4.1](http://valgrind.org/docs/manual/faq.html)
+[3.valgrind--问题4.1](http://valgrind.org/docs/manual/faq.html)
