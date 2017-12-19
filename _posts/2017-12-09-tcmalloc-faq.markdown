@@ -72,7 +72,7 @@ tcmalloc为ThreadCache中的每个size class的free list都设置了独立的max
 PS: ThreadCache中size class的free list大小非常重要，如果free list太小，需要经常访问CentralFreeList影响性能；如果free list太大，又会造成空间浪费。并且由于线程还存在非对称性的alloc/free行为(比如生产者与消费者线程；消费者线程只负责free，基本上不需要有free list)，所以设置free list为合适的大小比较棘手。为了更合理的设置free list大小，tcmalloc采取了“慢启动”算法：刚开始max_length设置为1，随着free list更频繁的使用，其最大长度也会跟着增长(细节略)。
 
 ##### thread cache的容量超过限额
-tcmalloc为每个ThreadCache设置了占用空间最大阈值max_size(初始的的大小为64K)，并规定了所有线程占用的总空间不能超过TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES(默认为32M)。当一个线程的ThreadCache大小超过max_size之后，tcmalloc就会遍历此ThreadCache中所有空闲列表，将空闲列表中的一些对象回收到CentralFreeList(回收的大小根据每个free list的最低水位标记确定，每次回收最低水位的1/2)。在回收完之后，tcmalloc会检查是否还有还有可用配额，如果有，则增加此ThreadCache的max_size值，如果没有，则通过轮训的方式向其他线程”偷取”部分配额(每次偷取或增加64K，具体细节见ThreadCache::IncreaseCacheLimitLocked)。通过这种方式，对缓存需求大的线程会得到更大的配额。
+tcmalloc为每个ThreadCache设置了占用空间最大阈值max_size(初始的的大小为64K)，并规定了所有ThreadCache占用的总空间不能超过TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES(默认为32M)。当一个ThreadCache中总的free list大小超过max_size之后，tcmalloc就会遍历此ThreadCache中所有空闲列表，将空闲列表中的一些对象回收到CentralFreeList(回收的大小根据每个free list的最低水位标记确定，每次回收最低水位的1/2)。在回收完之后，tcmalloc会检查是否还有还有可用配额，如果有，则增加此ThreadCache的max_size值，如果没有，则通过轮训的方式向其他线程”偷取”部分配额(每次偷取或增加64K，具体细节见ThreadCache::IncreaseCacheLimitLocked)。通过这种方式，对缓存需求大的线程会得到更大的配额。
 
 PS：对于使用多个线程的应用程序，TCMALLOC_MAX_TOTAL_THREAD_CACHE_BYTES的默认值可能不够，如果怀疑应用程序在多线程环境下由于tcmalloc中的锁争用而引发性能问题，可以尝试增加此值。
 
@@ -145,8 +145,22 @@ p2=0xee6022
 2. 使用new()在分配失败时可以回调指定函数(std_new_handler)，malloc()不可以
 3. 是否可以抛出异常等其他语法差别
 
+#### 问题四：如何将STL默认的内存分配器改为tcmalloc
+只需要链接tcmalloc！其它什么都不需要做。
+
+为了提高内存分配的速度，STL在默认情况下申请内存时不会直接调用new()和delete()，而是维护了一个内存池，对于已经销毁的对象，STL会将其缓存到内存池中，以供下次使用。
+为了禁用STL的内存池，在源代码中定义了如下两个环境变量：
+```c++
+setenv("GLIBCPP_FORCE_NEW", "1", false /* no overwrite*/);
+setenv("GLIBCXX_FORCE_NEW", "1", false /* no overwrite*/);
+```
+这两个环境变量为gcc3.2.2之后定义的，它们会强制STL默认分配器调用new()及delete()来进行分配或者释放操作，而tcmalloc又重新定义了new()及delete()的实现，所以STL默认的内存分配器就改为了tcmalloc。
+使用tcmalloc作为默认分配器会比STL内存池方式更加的快速(尤其是小内存的分配)。
+
 
 #### 参考：
 [1. tcmalloc原理剖析](http://gao-xiao-long.github.io/2017/11/25/tcmalloc/)
 
 [2. Post-Mortem Heap Analysis: TCMalloc](https://backtrace.io/blog/memory-allocator-tcmalloc/)
+
+[3.valgrind中的问题4.1](http://valgrind.org/docs/manual/faq.html)
