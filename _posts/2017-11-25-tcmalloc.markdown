@@ -1,6 +1,6 @@
 ---
 layout: post
-title: tcmalloc原理剖析
+title: tcmalloc原理剖析(基于gperftools-2.1)
 date: 2017-11-25
 author: "gao-xiao-long"
 catalog: true
