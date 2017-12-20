@@ -14,6 +14,7 @@ tags:
 tcmalloc是google开发的一个专门为高并发场景优化的内存分配器，全称为"thread cache malloc"。按照[官网](http://goog-perftools.sourceforge.net/doc/tcmalloc.html)的介绍，tcmalloc相比于glibc2.3的malloc(底层实现为ptmalloc2)主要有以下优点：
 1. 快速：一台2.8GHz的P4机器上，执行一次malloc及free大约需要300纳秒;而tcmalloc的版本同样的操作大约只需要50纳秒。
 2. 空间占用小：相比ptmalloc2，tcmalloc对小对象占用空间进行了优化。例如：分配N个8字节对象只需要占用8N\*1.01字节的空间。即，只需要多使用1%的空间。而ptmalloc2中每个对象都需要使用一个4字节的头信息，最后占用的字节可能达到8N\*8。
+3. 不容易出现内存暴涨
 
 ### 使用方法
 通过以下两种方法可以将默认的malloc-allocation替换为tcmalloc。
@@ -71,6 +72,8 @@ class FreeList {
 private:
  void*    list_;
  uint32_t length_;
+ uint32_t lowater_;
+ uint32_t max_length_;
 };
 
 class ThreadCache {
