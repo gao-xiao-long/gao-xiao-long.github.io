@@ -1,8 +1,0 @@
-http://jamesgolick.com/2013/5/19/how-tcmalloc-works.html
-
-1. 替换成tcmalloc的方法：
-2. 1. PRE_LOAD（优缺点）
-3. 2. -ltcmalloc(原理)
-  1. libc_override.h中。包含了不同的替换方法。
-1. 代码实现原理
-2. 内存错误的例子（double free的后果？） https://backtrace.io/blog/memory-allocator-tcmalloc/
