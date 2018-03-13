@@ -167,8 +167,9 @@ Proxy由多个下游组成，有可能出现某个下游模块因为功能升级
 前面是从代码层面说明了如何进行过载保护，但是过载保护是一个系统性的工程，除了代码层面，还需要从产品和运维层面下功夫，在产品层面，当系统过载时，需要给用户一个良好的引导，防止用户不停的人为重试导致系统压力加剧。在运维层面，需要对系统建立全方面的报警机制，当系统请求量达到容量的某些阈值后能够快速平滑的扩容。
 
 #### 参考：
-1. 腾讯后台开发技术总监浅谈过载保护
-2. 阿里技术嘉年华046-海量服务之过载保护
-3. [服务器过载保护（上篇）——过载介绍](http://wetest.qq.com/lab/view/69.html)
-4. [服务器过载保护（下篇）——过载处理新方案](http://wetest.qq.com/lab/view/70.html)
-5. [Exponential Backoff And Jitter](https://www.awsarchitectureblog.com/2015/03/backoff.html)
+1. [google的基于RTT的拥塞避免算法](http://conferences.sigcomm.org/sigcomm/2015/pdf/papers/p537.pdf)
+2. [Stop Rate Limiting! Capacity Management](https://www.youtube.com/watch?v=m64SWl9bfvk)
+3. 腾讯后台开发技术总监浅谈过载保护
+4. [服务器过载保护（上篇）——过载介绍](http://wetest.qq.com/lab/view/69.html)
+5. [服务器过载保护（下篇）——过载处理新方案](http://wetest.qq.com/lab/view/70.html)
+6. [Exponential Backoff And Jitter](https://www.awsarchitectureblog.com/2015/03/backoff.html)
