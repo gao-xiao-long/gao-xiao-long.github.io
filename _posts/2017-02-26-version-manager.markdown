@@ -86,7 +86,7 @@ LevelDB在给定时间的某个状态被称为version(Version类表示)。对ver
 
 #### FileMetaData
 
-LevelDB使用FileMEtaData表示SST文件元信息。数据结构如下:
+LevelDB使用FileMetaData表示SST文件元信息。数据结构如下:
 
 ```c++
 struct FileMetaData {
@@ -95,7 +95,7 @@ struct FileMetaData {
   uint64_t number;            // SST文件命名规则为(number + .sst),以number即可表示SST文件名称。
   uint64_t file_size;         // 文件大小
   InternalKey smallest;       // SST文件中最小的key。(SST文件中key按序排列)
-  InternalKey largest;        // SST文件中最大的key。
+  InternalKey largest;        // SST文件中最大的key。  
 
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) { }
 };
@@ -166,8 +166,8 @@ VersionEdit的主要成员变量如下:
   std::vector< std::pair<int, FileMetaData> > new_files_;
   std::string comparator_; // 比较器名称
   uint64_t log_number_;    // WAL log file number
-  uint64_t prev_log_number_;
-  uint64_t next_file_number_;
+  uint64_t prev_log_number_;  
+  uint64_t next_file_number_;   
   SequenceNumber last_sequence_; // leveldb中最后的sequence
 
   // Compaction相关，暂不展开
@@ -275,6 +275,7 @@ LevelDB使用Builder类来高效的将base version及一系列的version edit合
   void SaveTo(Version* v)  // 将当前状态保存成版本v
 ```
 
+
 以上是版本管理相关核心结构的的实现介绍。知道了各种核心结构之间的关系，还有一个问题需要搞清楚，即:内存version信息如何在LevelDB重启时还能恢复到最新的一致性状态呢?
 
 答案是:MANIFEST。
@@ -287,7 +288,7 @@ LevelDB主要是依赖MANIFEST来保持数据的一致性。先介绍几个术�
 - CURRENT 指的是最新的manifest log
 
 MANIFEST记录是LevelDB版本信息状态变化的事务日志。它包含manifest log及指向最新的manifest log的指针。Manifest logs是名为MANIFEST-(seq number)的滚动日志文件。seq number(序列号)一直增加。CURRENT是一个执行最新的manifest log的特殊文件。
-在系统启动时，最新的manifest log保存了LevelDB的一致性状态。对LevelDB状态的任何后续更改(新增version edit)都会记录到manifest log中。当manifest文件超过指定大小时。一个新的manifest文件将会被创建，作为保存LevelD状态的快照。指向最新的manifest的文件指针(CURRENT file)也将更新并同步到文件系统(sync)。成功更新到CURRENT file后，冗余的manifest文件将会被清除。
+在系统启动时，最新的manifest log保存了LevelDB的一致性状态。对LevelDB状态的任何后续更改(新增version edit)都会记录到manifest log中。当manifest文件超过指定大小时。一个新的manifest文件将会被创建，作为保存LevelDB状态的快照。指向最新的manifest的文件指针(CURRENT file)也将更新并同步到文件系统(sync)。成功更新到CURRENT file后，冗余的manifest文件将会被清除。
 
 - MANIFEST = { CURRENT, MANIFEST-<seq-no>* }
 - CURRENT = 指向最新的manifest log
