@@ -1,6 +1,6 @@
 ---
 layout: post
-title: tcmalloc相关问题答疑(基于gperftools-2.1)
+title: tcmalloc相关FAQ(基于gperftools-2.1)
 date: 2017-12-09
 author: "gao-xiao-long"
 catalog: true
