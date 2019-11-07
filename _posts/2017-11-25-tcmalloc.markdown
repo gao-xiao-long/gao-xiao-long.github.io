@@ -211,3 +211,6 @@ CentralFreeList从PageHeap拿到一个Span后：
 [8.Anatomy of a Program in Memory](http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/)
 
 [9.How the Kernel Manages Your Memory](http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/)
+[10.ptmalloc介绍 GLibC Malloc for Exploiters: Leak It, Write It, Become a Wizard - Yannay Livneh
+](https://www.youtube.com/watch?v=z33CYcMf2ug&t=302s)
+[11.What Programmers Should Know About Memory Allocation](https://www.youtube.com/watch?v=gYfd25Bdmws&feature=youtu.be)
